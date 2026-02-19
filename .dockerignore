@@ -1,0 +1,9 @@
+node_modules
+.git
+.next/cache
+**/node_modules
+**/.next/cache
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
