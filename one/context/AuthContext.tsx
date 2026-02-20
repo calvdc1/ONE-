@@ -9,7 +9,8 @@ import {
   User 
 } from "firebase/auth";
 import type { FirebaseOptions } from "firebase/app";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc, setDoc, updateDoc, getDocs, query, where, arrayUnion, arrayRemove } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 
 export interface UserProfile {
@@ -172,6 +173,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
+      (async () => {
+        try {
+          const email = user?.email;
+          if (email) {
+            const ref = doc(db, "users", email);
+            const snap = await getDoc(ref);
+            if (snap.exists()) {
+              const data = snap.data() as Partial<UserProfile> & {
+                followers?: number; following?: number;
+                followersList?: string[]; followingList?: string[];
+              };
+              const prof: UserProfile = {
+                displayName: data.displayName ?? email.split("@")[0],
+                username: data.username ?? email.split("@")[0],
+                bio: data.bio ?? "Welcome to my profile!",
+                location: data.location ?? "Unknown",
+                website: data.website ?? "",
+                campus: data.campus ?? null,
+                createdAt: data.createdAt ?? Date.now(),
+                followers: data.followers ?? 0,
+                following: data.following ?? 0,
+                avatarUrl: data.avatarUrl ?? null,
+                coverUrl: data.coverUrl ?? null
+              };
+              setUserProfile(prof);
+              localStorage.setItem("user_profile", JSON.stringify(prof));
+              if (data.followersList) localStorage.setItem(`followers_of:${prof.displayName}`, JSON.stringify(data.followersList));
+              if (data.followingList) localStorage.setItem(`following_of:${prof.displayName}`, JSON.stringify(data.followingList));
+              upsertUserIndex(prof.displayName, prof);
+            } else if (user) {
+              const baseProfile: UserProfile = {
+                displayName: email.split('@')[0],
+                username: email.split('@')[0],
+                bio: "Welcome to my profile!",
+                location: "Unknown",
+                website: "",
+                campus: null,
+                createdAt: Date.now(),
+                followers: 0,
+                following: 0,
+                avatarUrl: null,
+                coverUrl: null
+              };
+              await setDoc(ref, { ...baseProfile, followersList: [], followingList: [] });
+              setUserProfile(baseProfile);
+              localStorage.setItem("user_profile", JSON.stringify(baseProfile));
+              upsertUserIndex(baseProfile.displayName, baseProfile);
+            }
+          }
+        } catch {}
+      })();
       const savedProfile = localStorage.getItem("user_profile");
       if (savedProfile) {
         const parsed: UserProfile = JSON.parse(savedProfile);
@@ -205,6 +257,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Persist profile first
       setUserProfile(profile);
       localStorage.setItem("user_profile", JSON.stringify(profile));
+      (async () => {
+        try {
+          if (FIREBASE_CONFIGURED) {
+            const email = user?.email;
+            if (email) {
+              const ref = doc(db, "users", email);
+              await updateDoc(ref, { ...profile });
+            }
+          }
+        } catch {}
+      })();
       try {
         const email = user?.email || (JSON.parse(localStorage.getItem("mock_user") || "{}") as { email?: string }).email;
         if (email) {
@@ -250,7 +313,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ((auth.app.options as FirebaseOptions).apiKey !== "YOUR_API_KEY");
       
       if (isFirebaseConfigured) {
-        await signInWithEmailAndPassword(auth, email, pass);
+        const cred = await signInWithEmailAndPassword(auth, email, pass);
+        try {
+          const ref = doc(db, "users", email);
+          const snap = await getDoc(ref);
+          if (snap.exists()) {
+            const data = snap.data() as Partial<UserProfile> & { followers?: number; following?: number; followersList?: string[]; followingList?: string[]; };
+            const prof: UserProfile = {
+              displayName: data.displayName ?? email.split("@")[0],
+              username: data.username ?? email.split("@")[0],
+              bio: data.bio ?? "Welcome to my profile!",
+              location: data.location ?? "Unknown",
+              website: data.website ?? "",
+              campus: data.campus ?? null,
+              createdAt: data.createdAt ?? Date.now(),
+              followers: data.followers ?? 0,
+              following: data.following ?? 0,
+              avatarUrl: data.avatarUrl ?? null,
+              coverUrl: data.coverUrl ?? null
+            };
+            setUser(cred.user);
+            setUserProfile(prof);
+            localStorage.setItem("user_profile", JSON.stringify(prof));
+            if (data.followersList) localStorage.setItem(`followers_of:${prof.displayName}`, JSON.stringify(data.followersList));
+            if (data.followingList) localStorage.setItem(`following_of:${prof.displayName}`, JSON.stringify(data.followingList));
+            upsertUserIndex(prof.displayName, prof);
+          }
+        } catch {}
       } else {
         await new Promise(resolve => setTimeout(resolve, 50)); // Fake delay
         const usersRaw = localStorage.getItem("registered_users");
@@ -283,7 +372,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ((auth.app.options as FirebaseOptions).apiKey !== "YOUR_API_KEY");
       
       if (isFirebaseConfigured) {
-        await createUserWithEmailAndPassword(auth, email, pass);
+        const cred = await createUserWithEmailAndPassword(auth, email, pass);
+        const baseProfile: UserProfile = {
+          displayName: email.split('@')[0],
+          username: email.split('@')[0],
+          bio: "Welcome to my profile!",
+          location: "Unknown",
+          website: "",
+          campus: null,
+          createdAt: Date.now(),
+          followers: 0,
+          following: 0,
+          avatarUrl: null,
+          coverUrl: null
+        };
+        const merged = { ...baseProfile, ...(profile || {}) };
+        await setDoc(doc(db, "users", email), { ...merged, followersList: [], followingList: [] });
+        setUser(cred.user);
+        setUserProfile(merged);
+        localStorage.setItem("user_profile", JSON.stringify(merged));
+        localStorage.setItem(`user_profile:${email}`, JSON.stringify(merged));
+        upsertUserIndex(merged.displayName, merged);
       } else {
         await new Promise(resolve => setTimeout(resolve, 50));
         const mockUser = { uid: "mock-123", email } as User;
@@ -377,6 +486,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem(usersIndexKey, JSON.stringify(idx));
       }
     } catch {}
+    (async () => {
+      if (!FIREBASE_CONFIGURED) return;
+      try {
+        const myEmail = user?.email;
+        if (!myEmail) return;
+        const myRef = doc(db, "users", myEmail);
+        await updateDoc(myRef, {
+          following: Math.max(0, (userProfile?.following ?? 0) + delta),
+          // store display names for simplicity
+          ...(delta === 1 ? { followingList: arrayUnion(targetId) } : { followingList: arrayRemove(targetId) })
+        });
+        // find target by displayName
+        const q = query((await import("firebase/firestore")).collection(db, "users"), where("displayName", "==", targetId));
+        const res = await getDocs(q);
+        if (!res.empty) {
+          const tRef = res.docs[0].ref;
+          await updateDoc(tRef, {
+            followers: Math.max(0, ((res.docs[0].data().followers as number) ?? 0) + delta),
+            ...(delta === 1 ? { followersList: arrayUnion(me) } : { followersList: arrayRemove(me) })
+          });
+        }
+      } catch {}
+    })();
   };
 
   const isBlocked = (targetId: string) => blockedSet.has(targetId);
@@ -400,10 +532,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const listFollowing = () => {
     const me = userProfile?.displayName || "";
+    if (FIREBASE_CONFIGURED && user?.email) {
+      try {
+        const snap = localStorage.getItem(`following_of:${me}`);
+        const arr: string[] = snap ? JSON.parse(snap) : [];
+        return arr.sort((a, b) => a.localeCompare(b));
+      } catch { return []; }
+    }
     return Array.from(listFollowingStore(me)).sort((a, b) => a.localeCompare(b));
   };
   const listFollowers = () => {
     const me = userProfile?.displayName || "";
+    if (FIREBASE_CONFIGURED && user?.email) {
+      try {
+        const snap = localStorage.getItem(`followers_of:${me}`);
+        const arr: string[] = snap ? JSON.parse(snap) : [];
+        return arr.sort((a, b) => a.localeCompare(b));
+      } catch { return []; }
+    }
     return Array.from(listFollowersStore(me)).sort((a, b) => a.localeCompare(b));
   };
   const removeFollower = (targetId: string) => {
@@ -418,6 +564,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("user_profile", JSON.stringify(updated));
       upsertUserIndex(me, updated);
     }
+    (async () => {
+      if (!FIREBASE_CONFIGURED || !user?.email) return;
+      try {
+        const myRef = doc(db, "users", user.email);
+        await updateDoc(myRef, {
+          followers: Math.max(0, (userProfile?.followers ?? 0) - 1),
+          followersList: arrayRemove(targetId)
+        });
+      } catch {}
+    })();
   };
 
   const listNotifications = () => {
