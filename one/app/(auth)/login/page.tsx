@@ -13,50 +13,17 @@ export default function LoginPage() {
   const [showAnim, setShowAnim] = useState(false);
   const { signIn } = useAuth();
   const router = useRouter();
-  const [otpPhase, setOtpPhase] = useState<null | { email: string }>(null);
-  const [otpCode, setOtpCode] = useState("");
-  const [otpSending, setOtpSending] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       await signIn(email, password);
-      await beginOtp(email);
+      setShowAnim(true);
+      setTimeout(() => { router.push("/feed"); }, 300);
     } catch {
       alert("Failed to login. Please check your credentials.");
       setLoading(false);
-    }
-  };
-
-  const beginOtp = async (emailAddr: string) => {
-    try {
-      setOtpSending(true);
-      const res = await fetch("/api/auth/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailAddr }),
-      });
-      if (!res.ok) throw new Error("otp_send_failed");
-      setOtpPhase({ email: emailAddr });
-    } finally {
-      setOtpSending(false);
-      setLoading(false);
-    }
-  };
-
-  const verifyOtp = async () => {
-    if (!otpPhase) return;
-    const res = await fetch("/api/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: otpPhase.email, code: otpCode }),
-    });
-    if (res.ok) {
-      setShowAnim(true);
-      setTimeout(() => { router.push("/feed"); }, 300);
-    } else {
-      alert("Invalid or expired code. Please try again.");
     }
   };
 
@@ -126,41 +93,6 @@ export default function LoginPage() {
           </motion.button>
         </form>
         
-        {otpPhase && (
-          <div className="mt-6 rounded-lg border p-4">
-            <div className="mb-2 text-sm text-gray-700">
-              We sent a 6‑digit code to <span className="font-semibold">{otpPhase.email}</span>. Enter it below to continue.
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="\\d{6}"
-                maxLength={6}
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 bg-white"
-                placeholder="123456"
-              />
-              <button
-                type="button"
-                onClick={verifyOtp}
-                disabled={otpCode.length !== 6}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold disabled:opacity-50"
-              >
-                Verify
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => beginOtp(otpPhase.email)}
-              disabled={otpSending}
-              className="mt-2 text-sm text-blue-600 hover:underline disabled:opacity-50"
-            >
-              Resend code
-            </button>
-          </div>
-        )}
         
         <motion.div 
           initial={{ opacity: 0 }}

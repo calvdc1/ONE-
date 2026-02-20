@@ -16,6 +16,12 @@ export default function Navbar() {
   const notifications = listNotifications ? listNotifications() : [];
   const unread = notifications.filter(n => !n.read).length;
 
+  // Hide navbar on auth pages like /login
+  if (typeof window !== "undefined") {
+    const hideOn = pathname === "/login";
+    if (hideOn) return null;
+  }
+
   const navItems = useMemo(() => ([
     { name: 'Newsfeed', href: '/feed', icon: Home },
     { name: 'Groups', href: '/groups', icon: Users },
