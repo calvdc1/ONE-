@@ -1,11 +1,11 @@
 "use client";
 
-import { use } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Send, MessageSquare, Phone, Video, Info, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
+import { useParams } from "next/navigation";
 
 type Message = {
   id: string;
@@ -25,8 +25,9 @@ type Thread = {
   createdBy: string;
 };
 
-export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function ChatPage() {
+  const params = useParams<{ id: string }>();
+  const id = params.id;
   const { user } = useAuth();
   const userKey = useMemo(() => user?.email || user?.uid || "guest", [user]);
   const threadId = decodeURIComponent(id);

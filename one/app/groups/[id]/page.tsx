@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, use, useRef } from "react";
+import { useState, useRef } from "react";
 import { ArrowLeft, Users, Send, Heart, MessageCircle, Share2, Plus, X, Image as ImageIcon, Mic, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
+import { useParams } from "next/navigation";
 
-export default function GroupDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function GroupDetailsPage() {
+  const params = useParams<{ id: string }>();
+  const id = params.id;
   // const router = useRouter();
   const { showToast } = useToast();
   const { user } = useAuth();
