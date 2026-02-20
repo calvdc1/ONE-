@@ -10,6 +10,9 @@ import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
+import { db, app, storage } from "@/lib/firebase";
+import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { ref as storageRef, uploadString, getDownloadURL } from "firebase/storage";
 
 type Post = {
   id: number;
@@ -58,6 +61,15 @@ export default function FeedPage() {
       return [];
     }
   });
+  const [docIdByPostId, setDocIdByPostId] = useState<Record<number, string>>({});
+
+  const isFirebaseConfigured = (() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const opts = (app.options as any) || {};
+      return Boolean(opts.apiKey && opts.apiKey !== "YOUR_API_KEY");
+    } catch { return false; }
+  })();
 
   const savePosts = (next: Post[]) => {
     setPosts(next);
@@ -112,12 +124,45 @@ export default function FeedPage() {
     try { localStorage.setItem(mutedKey, JSON.stringify(Array.from(setx))); } catch {}
   };
 
-  const handlePost = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    const q = query(collection(db, "posts"), orderBy("id", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      const next: Post[] = [];
+      const map: Record<number, string> = {};
+      snap.forEach(d => {
+        const data = d.data() as Partial<Post> & { id: number };
+        if (typeof data.id !== "number") return;
+        const post: Post = {
+          id: data.id,
+          user: data.user || "Unknown",
+          campus: data.campus || "Unknown",
+          content: data.content || "",
+          imageUrl: data.imageUrl,
+          imageDataUrl: data.imageDataUrl,
+          audioDataUrl: data.audioDataUrl,
+          time: data.time || "Just now",
+          likes: typeof data.likes === "number" ? data.likes : 0,
+          comments: typeof data.comments === "number" ? data.comments : 0,
+          liked: false,
+          expanded: false,
+          commentsList: Array.isArray(data.commentsList) ? (data.commentsList as Array<{ id: number; author: string; content: string; time: string }>) : []
+        };
+        next.push(post);
+        map[data.id] = d.id;
+      });
+      setDocIdByPostId(map);
+      setPosts(next);
+    });
+    return () => unsub();
+  }, [isFirebaseConfigured]);
+
+  const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) { showToast("Log in to post", "error"); return; }
     if (!newPostContent.trim()) return;
 
-    const newPost = {
+    const newPost: Post = {
       id: Date.now(),
       user: user?.displayName || user?.email?.split('@')[0] || "Me",
       campus: userProfile?.campus || "Unknown",
@@ -132,7 +177,38 @@ export default function FeedPage() {
       expanded: false
     };
 
-    savePosts([newPost, ...posts]);
+    let imgUrl: string | undefined = newPost.imageUrl;
+    let audUrl: string | undefined = undefined;
+    if (isFirebaseConfigured) {
+      try {
+        if (newPost.imageDataUrl) {
+          const r = storageRef(storage, `uploads/images/${(user?.uid || user?.email || "user").replace(/[^a-zA-Z0-9_-]/g, "_")}/${newPost.id}.png`);
+          await uploadString(r, newPost.imageDataUrl, "data_url");
+          imgUrl = await getDownloadURL(r);
+        }
+        if (newPost.audioDataUrl) {
+          const r = storageRef(storage, `uploads/audio/${(user?.uid || user?.email || "user").replace(/[^a-zA-Z0-9_-]/g, "_")}/${newPost.id}.webm`);
+          await uploadString(r, newPost.audioDataUrl, "data_url");
+          audUrl = await getDownloadURL(r);
+        }
+      } catch {
+        // If upload fails, continue with local fallback below
+      }
+      const payload = {
+        ...newPost,
+        imageUrl: imgUrl || newPost.imageUrl,
+        imageDataUrl: undefined,
+        audioDataUrl: audUrl ? undefined : newPost.audioDataUrl,
+        createdAt: serverTimestamp()
+      };
+      try {
+        await addDoc(collection(db, "posts"), payload);
+      } catch {
+        savePosts([newPost, ...posts]);
+      }
+    } else {
+      savePosts([newPost, ...posts]);
+    }
     try {
       const followers = listFollowers();
       followers.forEach(f => notify(f, { type: "post", from: newPost.user, postId: newPost.id }));
@@ -160,6 +236,13 @@ export default function FeedPage() {
       return post;
     });
     savePosts(next);
+    if (isFirebaseConfigured) {
+      const did = docIdByPostId[id];
+      if (did) {
+        const after = next.find(p => p.id === id)?.likes ?? 0;
+        updateDoc(doc(db, "posts", did), { likes: after }).catch(() => {});
+      }
+    }
     if (likedNow && target) {
       const me = user?.displayName || user?.email?.split("@")[0] || "";
       if (target.user && target.user !== me) {
