@@ -1,0 +1,269 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { MessageSquare, Search, X, UserPlus } from "lucide-react";
+import { motion, AnimatePresence, useMotionValue } from "framer-motion";
+ 
+import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
+
+export default function MessagesPage() {
+  const { showToast } = useToast();
+  const { user } = useAuth();
+  const router = useRouter();
+  const [isNewChat, setIsNewChat] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const userKey = useMemo(() => user?.email || user?.uid || "guest", [user]);
+  
+  type Thread = {
+    id: string;
+    name: string;
+    lastMessage: string;
+    time: string;
+    unread: number;
+    createdBy: string;
+  };
+  
+  type Friend = {
+    id: string;
+    name: string;
+    avatarColor: string;
+  };
+  
+  const friends: Friend[] = [
+    { id: "f1", name: "Juan Dela Cruz", avatarColor: "bg-blue-200" },
+    { id: "f2", name: "Maria Clara", avatarColor: "bg-pink-200" },
+    { id: "f3", name: "Tech Club Group", avatarColor: "bg-purple-200" },
+    { id: "f4", name: "Carlos", avatarColor: "bg-amber-200" },
+  ];
+  
+  const readThreads = (): Thread[] => {
+    try {
+      const raw = localStorage.getItem(`threads:${userKey}`);
+      const parsed: Thread[] = raw ? JSON.parse(raw) : [];
+      return parsed.filter(t => t.createdBy === userKey);
+    } catch {
+      return [];
+    }
+  };
+  const saveThreads = (list: Thread[]) => {
+    try {
+      localStorage.setItem(`threads:${userKey}`, JSON.stringify(list));
+    } catch {}
+  };
+  
+  const [conversations, setConversations] = useState<Thread[]>(readThreads);
+  
+  let seq = 0;
+  const genId = () => {
+    seq += 1;
+    return `t-${seq}`;
+  };
+  const startThread = (f: Friend) => {
+    const exists = conversations.find(c => c.name === f.name);
+    if (exists) {
+      setIsNewChat(false);
+      showToast(`Opened chat with ${f.name}`, "success");
+      return;
+    }
+    const t: Thread = {
+      id: genId(),
+      name: f.name,
+      lastMessage: "Say hi!",
+      time: "",
+      unread: 0,
+      createdBy: userKey
+    };
+    const next = [t, ...conversations];
+    setConversations(next);
+    saveThreads(next);
+    setIsNewChat(false);
+    showToast(`Started chat with ${f.name}`, "success");
+  };
+
+  // handled entirely via friend list; search box filters available friends
+
+  const removeThread = (id: string) => {
+    const next = conversations.filter(c => c.id !== id);
+    setConversations(next);
+    saveThreads(next);
+    showToast("Conversation removed", "success");
+  };
+  const markRead = (id: string) => {
+    const next = conversations.map(c => c.id === id ? { ...c, unread: 0 } : c);
+    setConversations(next);
+    saveThreads(next);
+    showToast("Marked as read", "success");
+  };
+
+  const ChatRow = ({ chat, index }: { chat: Thread; index: number }) => {
+    const x = useMotionValue(0);
+    const handleEnd = (_e: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number } }) => {
+      const dx = info?.offset?.x ?? 0;
+      if (dx <= -80) {
+        removeThread(chat.id);
+        return;
+      }
+      if (dx >= 80) {
+        markRead(chat.id);
+        return;
+      }
+    };
+    const onClickOpen = () => {
+      router.push(`/messages/${chat.id}`);
+    };
+    return (
+      <div className="relative mb-2">
+        <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+          <div className="h-full w-full flex">
+            <div className="flex-1 bg-emerald-900/20 text-emerald-400 flex items-center pl-4">Read</div>
+            <div className="flex-1 bg-red-900/20 text-red-400 flex items-center justify-end pr-4">Remove</div>
+          </div>
+        </div>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          drag="x"
+          dragConstraints={{ left: -120, right: 120 }}
+          onDragEnd={handleEnd}
+          style={{ x }}
+          className="card-dark p-4 rounded-xl shadow-sm flex items-center hover:bg-zinc-800 transition cursor-pointer relative"
+          onClick={onClickOpen}
+        >
+          <div className="w-12 h-12 bg-gray-200 rounded-full mr-4 flex-shrink-0 flex items-center justify-center text-gray-700 font-bold">
+            {chat.name.charAt(0)}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex justify-between items-baseline mb-1">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                className="font-semibold text-metallic-gold truncate hover:text-amber-300 transition-colors text-left"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  router.push(`/feed?user=${encodeURIComponent(chat.name)}`);
+                }}
+                title="View timeline"
+              >
+                {chat.name}
+              </motion.button>
+              <span className="text-xs text-gray-400">{chat.time}</span>
+            </div>
+            <p className={`text-sm truncate ${chat.unread > 0 ? "font-semibold text-gray-100" : "text-gray-300"}`}>
+              {chat.lastMessage}
+            </p>
+          </div>
+          
+          {chat.unread > 0 && (
+            <div className="ml-3 bg-blue-600 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+              {chat.unread}
+            </div>
+          )}
+        </motion.div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="max-w-xl mx-auto pt-4 pb-24 px-4">
+      <header className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="w-6 h-6 text-red-600" />
+          <h1 className="text-2xl font-bold text-metallic-gold">Messages</h1>
+          <div className="mt-1 h-1 w-16 bg-gradient-to-r from-rose-800 via-red-700 to-rose-500 rounded" />
+        </div>
+        <motion.button 
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setIsNewChat(true)}
+          className="bg-gradient-to-r from-rose-800 via-red-700 to-rose-500 text-white px-4 py-2 rounded-full shadow-md hover:from-rose-900 hover:via-red-800 hover:to-rose-600 transition inline-flex items-center"
+        >
+          <MessageSquare className="w-5 h-5 mr-2" />
+          New Chat
+        </motion.button>
+      </header>
+      
+      {/* Search Bar */}
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+        <input 
+          type="text" 
+          placeholder="Search messages..." 
+          className="w-full pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 input-dark shadow-sm"
+        />
+      </div>
+
+      {/* New Chat Modal */}
+      <AnimatePresence>
+        {isNewChat && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) setIsNewChat(false);
+            }}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="modal-dark w-full max-w-sm p-6"
+            >
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg">New Message</h3>
+                    <button onClick={() => setIsNewChat(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                        <X className="w-6 h-6 text-gray-500" />
+                    </button>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Choose a friend</label>
+                  <div className="relative mb-3">
+                    <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      className="w-full pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 input-dark"
+                      placeholder="Search friends..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-60 overflow-y-auto space-y-2">
+                    {friends
+                      .filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(f => (
+                        <button
+                          key={f.id}
+                          onClick={() => startThread(f)}
+                          className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-zinc-800 transition text-left"
+                        >
+                          <div className={`w-8 h-8 ${f.avatarColor} rounded-full flex items-center justify-center text-gray-700 font-bold`}>
+                            {f.name.charAt(0)}
+                          </div>
+                          <span className="font-medium">{f.name}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="space-y-2">
+        <AnimatePresence>
+          {conversations.map((chat, index) => (
+            <ChatRow key={chat.id} chat={chat} index={index} />
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}

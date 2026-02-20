@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0) translateX(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-20px) translateX(10px) rotate(8deg);
+  }
+  100% {
+    transform: translateY(0) translateX(0) rotate(0);
+  }
+}
+
+.animate-float {
+  animation: float 10s ease-in-out infinite;
+}
+
+.animate-float-medium {
+  animation: float 14s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float 18s ease-in-out infinite;
+}
+
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 400ms ease-out both;
+}
+
+nextjs-portal,
+[data-nextjs-router],
+[data-nextjs-indicator],
+[data-nextjs-dev-overlay],
+#nextjs__container,
+.nextjs-portal {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.card-dark {
+  background: linear-gradient(135deg, #0b0c0f, #1b1c20 50%, #2a2b31);
+  border: 1px solid #3f3f46;
+  color: #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+
+.modal-dark {
+  background: linear-gradient(145deg, #0e0f12, #1c1d21 60%, #2b2d31);
+  border-radius: 1rem;
+  color: #e5e7eb;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  border: 1px solid #3f3f46;
+}
+
+.input-dark {
+  background-color: #0f1013;
+  color: #f3f4f6;
+  border: 1px solid #3f3f46;
+}
+
+.text-metallic-gold {
+  background: linear-gradient(180deg, #f9e7a3 0%, #f5d36b 35%, #d6b85a 50%, #f8e38c 65%, #b99740 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.card-bw {
+  background: linear-gradient(135deg, #0b0b0c, #18181b 45%, #2a2b31 70%, #d4d4d8 110%);
+  border: 1px solid #3f3f46;
+  color: #e5e7eb;
+}
+
+@keyframes metallic-shift {
+  0% {
+    background-position: 0% 50%, 50% 50%, 100% 50%;
+  }
+  50% {
+    background-position: 100% 50%, 0% 50%, 50% 50%;
+  }
+  100% {
+    background-position: 0% 50%, 50% 50%, 100% 50%;
+  }
+}
+
+.hero-metallic {
+  background-image:
+    radial-gradient(60% 80% at 20% 10%, rgba(248,196,64,0.22), rgba(0,0,0,0) 60%),
+    radial-gradient(60% 80% at 80% 20%, rgba(183,28,28,0.22), rgba(0,0,0,0) 70%),
+    conic-gradient(from 210deg at 50% 50%, rgba(255,215,128,0.05), rgba(0,0,0,0) 25% 75%, rgba(255,215,128,0.06)),
+    linear-gradient(140deg, #2b0000 0%, #4a0b0b 20%, #7a1010 40%, #9c1515 54%, #b01717 62%, #f5d36b 64%, #8b0d0d 68%, #4a0b0b 85%, #200000 100%);
+  background-size: 160% 160%, 160% 160%, 200% 200%, 220% 220%;
+  animation: metallic-shift 18s ease-in-out infinite;
+}
