@@ -31,12 +31,7 @@ export default function MessagesPage() {
     avatarColor: string;
   };
   
-  const friends: Friend[] = [
-    { id: "f1", name: "Juan Dela Cruz", avatarColor: "bg-blue-200" },
-    { id: "f2", name: "Maria Clara", avatarColor: "bg-pink-200" },
-    { id: "f3", name: "Tech Club Group", avatarColor: "bg-purple-200" },
-    { id: "f4", name: "Carlos", avatarColor: "bg-amber-200" },
-  ];
+  const friends: Friend[] = [];
   
   const readThreads = (): Thread[] => {
     try {

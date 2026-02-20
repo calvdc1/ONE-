@@ -1,12 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -59,21 +57,6 @@ export default function LoginPage() {
       setTimeout(() => { router.push("/feed"); }, 300);
     } else {
       alert("Invalid or expired code. Please try again.");
-    }
-  };
-
-  const loginWithGoogle = async () => {
-    setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      const user = auth.currentUser;
-      const emailAddr = user?.email;
-      if (!emailAddr) throw new Error("no_email");
-      await beginOtp(emailAddr);
-    } catch (e) {
-      alert("Google sign-in failed. Please try again.");
-      setLoading(false);
     }
   };
 
@@ -142,16 +125,6 @@ export default function LoginPage() {
             {loading ? "Logging in..." : "Log In"}
           </motion.button>
         </form>
-        
-        <div className="my-4 text-center text-gray-500 text-sm">or</div>
-        <button
-          onClick={loginWithGoogle}
-          disabled={loading}
-          className="w-full border border-gray-300 bg-white text-gray-800 py-2 rounded-lg font-semibold hover:bg-gray-50 inline-flex items-center justify-center gap-2 disabled:opacity-50"
-          aria-label="Continue with Google"
-        >
-          Continue with Google
-        </button>
         
         {otpPhase && (
           <div className="mt-6 rounded-lg border p-4">

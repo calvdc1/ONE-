@@ -39,8 +39,8 @@ export default function GroupDetailsPage({ params }: { params: Promise<{ id: str
       const key = `group_membership:${u}`;
       const s = localStorage.getItem(key);
       const set = s ? new Set<string>(JSON.parse(s)) : new Set<string>();
-      return set.has(slug) || isCampusGroup;
-    } catch { return isCampusGroup; }
+      return set.has(slug);
+    } catch { return false; }
   })();
 
   const [group, setGroup] = useState(() => ({

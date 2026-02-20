@@ -48,48 +48,14 @@ export default function FeedPage() {
   const selectedUser = useMemo(() => searchParams.get("user"), [searchParams]);
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   
-  const defaultPosts: Post[] = [
-    {
-      id: 1,
-      user: "Juan Dela Cruz",
-      campus: "MSU-IIT",
-      content: "Just finished my finals! Who else is celebrating tonight? 🎉",
-      time: "2h ago",
-      likes: 24,
-      comments: 5,
-      liked: false,
-      expanded: false
-    },
-    {
-      id: 2,
-      user: "Maria Clara",
-      campus: "MSU-Main",
-      content: "The sunset at the lake is beautiful today. #MSUMarawi",
-      time: "4h ago",
-      likes: 156,
-      comments: 12,
-      liked: true,
-      expanded: false
-    },
-    {
-      id: 3,
-      user: "Tech Club",
-      campus: "MSU-Gensan",
-      content: "Join us for the hackathon this weekend! Register at the link in bio.",
-      time: "5h ago",
-      likes: 45,
-      comments: 2,
-      liked: false,
-      expanded: false
-    }
-  ];
+  const defaultPosts: Post[] = [];
   const [posts, setPosts] = useState<Post[]>(() => {
     try {
       const s = typeof window !== "undefined" ? localStorage.getItem("posts") : null;
       const arr = s ? (JSON.parse(s) as Post[]) : defaultPosts;
       return arr.map(p => ({ ...p, commentsList: p.commentsList ?? [] }));
     } catch {
-      return defaultPosts.map(p => ({ ...p, commentsList: [] }));
+      return [];
     }
   });
 
@@ -148,6 +114,7 @@ export default function FeedPage() {
 
   const handlePost = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) { showToast("Log in to post", "error"); return; }
     if (!newPostContent.trim()) return;
 
     const newPost = {

@@ -53,7 +53,7 @@ export default function GroupsPage() {
       campus: "All Campuses",
       members: "850 members",
       category: "Interest",
-      joined: true,
+      joined: false,
       slug: "anime-lovers"
     },
     {
@@ -73,7 +73,7 @@ export default function GroupsPage() {
     campus: c.display,
     members: "—",
     category: "Campus",
-    joined: true,
+    joined: false,
     slug: c.slug
   }));
 
@@ -129,10 +129,10 @@ export default function GroupsPage() {
   const readMembership = (): Set<string> => {
     try {
       const s = localStorage.getItem(userKey);
-      if (!s) return new Set(campusGroups.map(c => c.slug));
+      if (!s) return new Set();
       return new Set(JSON.parse(s));
     } catch {
-      return new Set(campusGroups.map(c => c.slug));
+      return new Set();
     }
   };
   const saveMembership = (set: Set<string>) => {

@@ -9,7 +9,9 @@ import { motion } from "framer-motion";
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [campus, setCampus] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -25,8 +27,10 @@ export default function SignupPage() {
     if (!verified) return;
     setLoading(true);
     try {
-      const username = name ? name.toLowerCase().replace(/\s+/g, "") : email.split("@")[0];
-      await signUp(email, password, { displayName: name || email.split("@")[0], username, campus });
+      const fullName = `${firstName} ${middleName} ${lastName}`.trim();
+      const usernameSeed = `${firstName}${lastName}` || email.split("@")[0];
+      const username = usernameSeed.toLowerCase().replace(/\s+/g, "");
+      await signUp(email, password, { displayName: fullName, username, campus });
       setShowSuccess(true);
       setTimeout(() => {
         signOut();
@@ -83,13 +87,45 @@ export default function SignupPage() {
             animate={{ x: 0, opacity: 1 }}
             transition={{ delay: 0.3 }}
           >
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
             <input 
               type="text" 
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 bg-white"
-              placeholder="John Doe"
+              placeholder="Juan"
+              required
+            />
+          </motion.div>
+          
+          <motion.div
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ delay: 0.35 }}
+          >
+            <label className="block text-sm font-medium text-gray-700 mb-1">Middle Name</label>
+            <input 
+              type="text" 
+              value={middleName}
+              onChange={(e) => setMiddleName(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 bg-white"
+              placeholder="S."
+              required
+            />
+          </motion.div>
+
+          <motion.div
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ delay: 0.4 }}
+          >
+            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+            <input 
+              type="text" 
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 bg-white"
+              placeholder="Dela Cruz"
               required
             />
           </motion.div>
