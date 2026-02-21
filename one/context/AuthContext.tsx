@@ -6,7 +6,9 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut as firebaseSignOut,
-  User 
+  User,
+  GoogleAuthProvider,
+  signInWithPopup 
 } from "firebase/auth";
 import type { FirebaseOptions } from "firebase/app";
 import { auth, db } from "@/lib/firebase";
@@ -42,6 +44,7 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   loading: boolean;
   signIn: (email: string, pass: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signUp: (email: string, pass: string, profile?: Partial<UserProfile>) => Promise<void>;
   signOut: () => Promise<void>;
   updateUserProfile: (profile: UserProfile) => void;
@@ -368,6 +371,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async () => {
+    const isFirebaseConfigured =
+      Boolean(auth && auth.app && auth.app.options) &&
+      ((auth.app.options as FirebaseOptions).apiKey !== "YOUR_API_KEY");
+    if (!isFirebaseConfigured) throw new Error("unavailable");
+    const provider = new GoogleAuthProvider();
+    const cred = await signInWithPopup(auth, provider);
+    const email = cred.user.email as string;
+    const ref = doc(db, "users", email);
+    const snap = await getDoc(ref);
+    const baseProfile: UserProfile = {
+      displayName: cred.user.displayName || email.split("@")[0],
+      username: (cred.user.displayName || email.split("@")[0]).replace(/\s+/g, "").toLowerCase(),
+      bio: "Welcome to my profile!",
+      location: "Unknown",
+      website: "",
+      campus: null,
+      createdAt: Date.now(),
+      followers: 0,
+      following: 0,
+      avatarUrl: null,
+      coverUrl: null
+    };
+    const sv = Date.now();
+    if (!snap.exists()) {
+      await setDoc(ref, { ...baseProfile, followersList: [], followingList: [], sessionVersion: sv });
+      setUserProfile(baseProfile);
+      localStorage.setItem("user_profile", JSON.stringify(baseProfile));
+      upsertUserIndex(baseProfile.displayName, baseProfile);
+    } else {
+      const data = snap.data() as Partial<UserProfile> & { followersList?: string[]; followingList?: string[] };
+      const prof: UserProfile = {
+        displayName: data.displayName ?? baseProfile.displayName,
+        username: data.username ?? baseProfile.username,
+        bio: data.bio ?? baseProfile.bio,
+        location: data.location ?? baseProfile.location,
+        website: data.website ?? baseProfile.website,
+        campus: data.campus ?? baseProfile.campus,
+        createdAt: data.createdAt ?? baseProfile.createdAt,
+        followers: data.followers ?? 0,
+        following: data.following ?? 0,
+        avatarUrl: data.avatarUrl ?? null,
+        coverUrl: data.coverUrl ?? null
+      };
+      await updateDoc(ref, { sessionVersion: sv });
+      setUserProfile(prof);
+      localStorage.setItem("user_profile", JSON.stringify(prof));
+      if (data.followersList) localStorage.setItem(`followers_of:${prof.displayName}`, JSON.stringify(data.followersList));
+      if (data.followingList) localStorage.setItem(`following_of:${prof.displayName}`, JSON.stringify(data.followingList));
+      upsertUserIndex(prof.displayName, prof);
+    }
+    try { localStorage.setItem(`sessionVersion:${email}`, String(sv)); } catch {}
+    setUser(cred.user);
+  };
+
   const signUp = async (email: string, pass: string, profile?: Partial<UserProfile>) => {
     try {
       const isFirebaseConfigured =
@@ -628,7 +686,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [FIREBASE_CONFIGURED, user?.email]);
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, signIn, signUp, signOut, updateUserProfile, isFollowing, toggleFollow, isBlocked, toggleBlock, listFollowing, listFollowers, removeFollower, listNotifications, markAllNotificationsRead, notify }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, signIn, signInWithGoogle, signUp, signOut, updateUserProfile, isFollowing, toggleFollow, isBlocked, toggleBlock, listFollowing, listFollowers, removeFollower, listNotifications, markAllNotificationsRead, notify }}>
       {children}
     </AuthContext.Provider>
   );

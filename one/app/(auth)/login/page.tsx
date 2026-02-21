@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showAnim, setShowAnim] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -93,12 +93,31 @@ export default function LoginPage() {
           </motion.button>
         </form>
         
+        <div className="mt-4">
+          <button
+            onClick={async () => {
+              try {
+                setLoading(true);
+                await signInWithGoogle();
+                setShowAnim(true);
+                setTimeout(() => { router.push("/feed"); }, 300);
+              } catch {
+                alert("Google sign-in failed.");
+                setLoading(false);
+              }
+            }}
+            className="w-full border border-gray-300 text-gray-800 bg-white py-2 rounded-lg font-semibold hover:bg-gray-50 transition"
+            disabled={loading}
+          >
+            Continue with Google
+          </button>
+        </div>
+        
         
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="mt-6 text-center text-sm text-gray-600"
         >
           Don&apos;t have an account?{" "}
           <Link href="/signup" className="text-blue-600 font-semibold hover:underline">
