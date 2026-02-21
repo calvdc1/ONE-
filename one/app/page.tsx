@@ -71,7 +71,7 @@ export default function Home() {
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 0.18, scale: 1 }}
         transition={{ duration: 1 }}
-        className="absolute top-0 left-0 w-full text-amber-200/30"
+        className="pointer-events-none absolute top-0 left-0 w-full text-amber-200/30"
         viewBox="0 0 1440 90"
       >
         <defs>
@@ -96,7 +96,7 @@ export default function Home() {
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 0.15, scale: 1 }}
         transition={{ duration: 1 }}
-        className="absolute inset-0 w-full h-full text-amber-200/20"
+        className="pointer-events-none absolute inset-0 w-full h-full text-amber-200/20"
       >
         <defs>
           <pattern id="one-grid" width="32" height="32" patternUnits="userSpaceOnUse">
@@ -149,7 +149,7 @@ export default function Home() {
         initial={{ scale: 0.85, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.6 }}
-        className="relative"
+        className="relative z-10"
       >
         <div className="absolute inset-0 rounded-full bg-gradient-to-r from-amber-400/25 via-amber-300/10 to-red-500/25 blur-2xl scale-110" aria-hidden="true" />
         <div className="absolute -inset-x-20 -top-6 h-24 bg-gradient-to-b from-amber-500/10 to-transparent blur-xl" aria-hidden="true" />
@@ -210,7 +210,7 @@ export default function Home() {
         Connect with your MSU community.
       </motion.p>
       
-      <div className="flex flex-col gap-4 w-full max-w-xs">
+      <div className="relative z-10 flex flex-col gap-4 w-full max-w-xs">
         <motion.div
             initial={{ x: -20, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
