@@ -274,6 +274,41 @@ export default function MessagesPage() {
           className="w-full pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 input-dark shadow-sm"
         />
       </div>
+      <div className="flex justify-end mb-4">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={async () => {
+            if (!user) return;
+            const meName = userProfile?.displayName || user.email?.split("@")[0] || "Me";
+            const existing = conversations.find(c => c.name === meName);
+            if (existing) {
+              router.push(`/messages/${existing.id}`);
+              return;
+            }
+            if (isFirebaseConfigured && user.email) {
+              try {
+                const ref = await addDoc(collection(db, "threads"), {
+                  names: [meName],
+                  participants: [user.email],
+                  lastMessage: "Saved",
+                  updatedAt: serverTimestamp()
+                });
+                router.push(`/messages/${ref.id}`);
+                return;
+              } catch {}
+            }
+            const t: Thread = { id: genId(), name: meName, lastMessage: "Saved", time: "", unread: 0, createdBy: userKey };
+            const next = [t, ...conversations];
+            setConversations(next);
+            saveThreads(next);
+            router.push(`/messages/${encodeURIComponent(t.id)}`);
+          }}
+          className="bg-zinc-900 text-gray-100 px-4 py-2 rounded-full shadow hover:bg-zinc-800"
+        >
+          Saved Messages
+        </motion.button>
+      </div>
 
       {/* New Chat Modal */}
       <AnimatePresence>

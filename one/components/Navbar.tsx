@@ -6,6 +6,8 @@ import { Home, Users, MessageSquare, User, Bell, ArrowLeft } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext';
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
+import { db, app } from '@/lib/firebase';
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 
 export default function Navbar() {
   const { user, listNotifications, markAllNotificationsRead } = useAuth();
@@ -13,7 +15,45 @@ export default function Navbar() {
   const router = useRouter();
   const [notifOpen, setNotifOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
-  const notifications = listNotifications ? listNotifications() : [];
+  const [remoteNotifications, setRemoteNotifications] = useState<Array<{id:string; type:string; from?:string; time?:unknown; read?:boolean}>>([]);
+  const isFirebaseConfigured = useMemo(() => {
+    const opts = app.options as { apiKey?: string } | undefined;
+    return Boolean(opts?.apiKey && opts.apiKey !== "YOUR_API_KEY");
+  }, []);
+  const toDisplayTime = (t: unknown): string => {
+    const maybe = t as { toDate?: () => Date } | undefined;
+    if (maybe?.toDate) {
+      try { return maybe.toDate().toLocaleString(); } catch { return ""; }
+    }
+    if (typeof t === "number") {
+      try { return new Date(t).toLocaleString(); } catch { return ""; }
+    }
+    if (typeof t === "string") {
+      const n = Number(t);
+      if (!Number.isNaN(n)) {
+        try { return new Date(n).toLocaleString(); } catch { return ""; }
+      }
+    }
+    return "";
+  };
+  useEffect(() => {
+    if (!isFirebaseConfigured || !user?.email) return;
+    const coll = collection(db, 'users', user.email, 'notifications');
+    const q = query(coll, orderBy('time', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      const list: Array<{id:string; type:string; from?:string; time?:unknown; read?:boolean}> = [];
+      snap.forEach(d => {
+        const data = d.data() as { type?: string; from?: string; time?: unknown; read?: boolean };
+        list.push({ id: d.id, type: String(data.type || ""), from: data.from, time: data.time, read: data.read });
+      });
+      setRemoteNotifications(list);
+    });
+    return () => unsub();
+  }, [isFirebaseConfigured, user?.email]);
+  type Notif = { id: string; type: string; from?: string; time?: unknown; read?: boolean };
+  const localNotifications = listNotifications ? listNotifications() : [];
+  const mappedLocal: Notif[] = localNotifications.map(n => ({ id: String(n.id), type: n.type, from: n.from, time: n.time, read: n.read }));
+  const notifications: Notif[] = isFirebaseConfigured && user?.email ? remoteNotifications : mappedLocal;
   const unread = notifications.filter(n => !n.read).length;
 
   const navItems = useMemo(() => ([
@@ -106,7 +146,7 @@ export default function Navbar() {
                       {n.type === 'comment' && (<span><b>{n.from}</b> commented on your post</span>)}
                       {n.type === 'post' && (<span><b>{n.from}</b> posted a new update</span>)}
                     </div>
-                    <div className="text-[10px] text-gray-400">{new Date(n.time).toLocaleString()}</div>
+                    <div className="text-[10px] text-gray-400">{toDisplayTime(n.time)}</div>
                   </div>
                 ))
               )}
@@ -162,7 +202,7 @@ export default function Navbar() {
                     {n.type === 'comment' && (<span><b>{n.from}</b> commented on your post</span>)}
                     {n.type === 'post' && (<span><b>{n.from}</b> posted a new update</span>)}
                   </div>
-                  <div className="text-[10px] text-gray-400">{new Date(n.time).toLocaleString()}</div>
+                  <div className="text-[10px] text-gray-400">{toDisplayTime(n.time)}</div>
                 </div>
               ))
             )}

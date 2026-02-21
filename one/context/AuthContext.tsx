@@ -10,7 +10,7 @@ import {
 } from "firebase/auth";
 import type { FirebaseOptions } from "firebase/app";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, updateDoc, getDocs, query, where, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, getDocs, query, where, arrayUnion, arrayRemove, addDoc, collection, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 
 export interface UserProfile {
@@ -332,6 +332,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               avatarUrl: data.avatarUrl ?? null,
               coverUrl: data.coverUrl ?? null
             };
+            const sv = Date.now();
+            try { await updateDoc(ref, { sessionVersion: sv }); } catch {}
+            try { localStorage.setItem(`sessionVersion:${email}`, String(sv)); } catch {}
             setUser(cred.user);
             setUserProfile(prof);
             localStorage.setItem("user_profile", JSON.stringify(prof));
@@ -387,7 +390,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           coverUrl: null
         };
         const merged = { ...baseProfile, ...(profile || {}) };
-        await setDoc(doc(db, "users", email), { ...merged, followersList: [], followingList: [] });
+        const sv = Date.now();
+        await setDoc(doc(db, "users", email), { ...merged, followersList: [], followingList: [], sessionVersion: sv });
+        try { localStorage.setItem(`sessionVersion:${email}`, String(sv)); } catch {}
         setUser(cred.user);
         setUserProfile(merged);
         localStorage.setItem("user_profile", JSON.stringify(merged));
@@ -506,6 +511,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             followers: Math.max(0, ((res.docs[0].data().followers as number) ?? 0) + delta),
             ...(delta === 1 ? { followersList: arrayUnion(me) } : { followersList: arrayRemove(me) })
           });
+          if (delta === 1) {
+            try {
+              await addDoc(collection(tRef, "notifications"), {
+                type: "follow",
+                from: me,
+                time: serverTimestamp(),
+                read: false
+              });
+            } catch {}
+          }
         }
       } catch {}
     })();
@@ -593,6 +608,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const notify = (target: string, n: Omit<NotificationItem, "id" | "time" | "read">) => {
     pushNotification(target, { ...n, id: Date.now(), time: Date.now(), read: false });
   };
+
+  useEffect(() => {
+    if (!FIREBASE_CONFIGURED || !user?.email) return;
+    const email = user.email;
+    const ref = doc(db, "users", email);
+    const unsub = onSnapshot(ref, (snap) => {
+      const data = snap.data() as { sessionVersion?: number } | undefined;
+      if (!data) return;
+      try {
+        const local = Number(localStorage.getItem(`sessionVersion:${email}`) || "0");
+        const remote = Number(data.sessionVersion || 0);
+        if (remote && local && remote !== local) {
+          firebaseSignOut(auth).catch(() => {});
+        }
+      } catch {}
+    });
+    return () => unsub();
+  }, [FIREBASE_CONFIGURED, user?.email]);
 
   return (
     <AuthContext.Provider value={{ user, userProfile, loading, signIn, signUp, signOut, updateUserProfile, isFollowing, toggleFollow, isBlocked, toggleBlock, listFollowing, listFollowers, removeFollower, listNotifications, markAllNotificationsRead, notify }}>
