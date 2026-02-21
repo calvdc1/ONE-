@@ -131,8 +131,17 @@ export default function FeedPage() {
       const next: Post[] = [];
       const map: Record<number, string> = {};
       snap.forEach(d => {
-        const data = d.data() as Partial<Post> & { id: number };
+        const data = d.data() as Partial<Post> & { id: number; createdAt?: unknown };
         if (typeof data.id !== "number") return;
+        let t = data.time || "Just now";
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const ts = (data as any).createdAt;
+          if (ts && typeof ts.toDate === "function") {
+            const dt = ts.toDate() as Date;
+            t = dt.toLocaleString();
+          }
+        } catch {}
         const post: Post = {
           id: data.id,
           user: data.user || "Unknown",
@@ -141,7 +150,7 @@ export default function FeedPage() {
           imageUrl: data.imageUrl,
           imageDataUrl: data.imageDataUrl,
           audioDataUrl: data.audioDataUrl,
-          time: data.time || "Just now",
+          time: t,
           likes: typeof data.likes === "number" ? data.likes : 0,
           comments: typeof data.comments === "number" ? data.comments : 0,
           liked: false,

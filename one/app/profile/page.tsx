@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Settings, MapPin, Calendar, Edit, LogOut, X, Save, Image as ImageIcon, User as UserIcon, MoreHorizontal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { db, app } from "@/lib/firebase";
+import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 
 export default function ProfilePage() {
   const { user, userProfile, updateUserProfile, signOut, listFollowing, listFollowers, toggleFollow, removeFollower, isFollowing } = useAuth();
@@ -115,12 +117,55 @@ export default function ProfilePage() {
   const [showFollowingModal, setShowFollowingModal] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const isFirebaseConfigured = useMemo(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const opts = (app.options as any) || {};
+      return Boolean(opts.apiKey && opts.apiKey !== "YOUR_API_KEY");
+    } catch { return false; }
+  }, []);
+  const [profilePosts, setProfilePosts] = useState<Post[]>([]);
 
   const searchParams = useSearchParams();
   const viewedName = searchParams.get("user") || "";
   const currentName = userProfile?.displayName?.trim() || "";
   const isSelf = !viewedName || viewedName.trim() === "" || viewedName === currentName || viewedName === userProfile?.username;
   const userKey = user?.email || user?.uid || "guest";
+
+  useEffect(() => {
+    const name = (viewedName && !isSelf) ? viewedName : (userProfile?.displayName || "");
+    if (!isFirebaseConfigured || !name) {
+      setProfilePosts(isSelf ? myPosts : allPosts.filter((p: Post) => p.user === name));
+      return;
+    }
+    const q = query(collection(db, "posts"), where("user", "==", name), orderBy("id", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      const list: Post[] = [];
+      snap.forEach(d => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = d.data() as any;
+        let t = data?.time || "";
+        try {
+          if (data?.createdAt && typeof data.createdAt.toDate === "function") {
+            t = data.createdAt.toDate().toLocaleString();
+          }
+        } catch {}
+        list.push({
+          id: data.id,
+          user: data.user || "",
+          campus: data.campus || "",
+          content: data.content || "",
+          time: t || "Just now",
+          likes: typeof data.likes === "number" ? data.likes : 0,
+          comments: typeof data.comments === "number" ? data.comments : 0,
+          liked: false,
+          expanded: false
+        });
+      });
+      setProfilePosts(list);
+    });
+    return () => unsub();
+  }, [isFirebaseConfigured, viewedName, isSelf, userProfile?.displayName, myPosts, allPosts]);
 
   type Thread = {
     id: string;
@@ -350,6 +395,10 @@ export default function ProfilePage() {
                 <span className="block font-bold text-metallic-gold">{displayProfile.followers ?? 0}</span>
                 <span className="text-xs text-gray-500">Followers</span>
                 </button>
+                <div className="text-center p-2 rounded-lg">
+                  <span className="block font-bold text-metallic-gold">{profilePosts.length}</span>
+                  <span className="text-xs text-gray-500">Posts</span>
+                </div>
             </div>
           </motion.div>
         </div>
@@ -537,15 +586,12 @@ export default function ProfilePage() {
 
       <div className="px-4 pt-6">
         <h3 className="font-bold text-metallic-gold mb-4">Posts</h3>
-        {(() => {
-          const profilePosts = isSelf ? myPosts : allPosts.filter((p: Post) => p.user === displayProfile.displayName);
-          return profilePosts.length === 0;
-        })() && (
+        {profilePosts.length === 0 && (
           <div className="card-dark p-4 rounded-xl shadow-sm text-sm text-gray-300">
             No posts yet.
           </div>
         )}
-        {(isSelf ? myPosts : allPosts.filter((p: Post) => p.user === displayProfile.displayName)).map((p, i) => (
+        {profilePosts.map((p, i) => (
           <motion.div
             key={p.id}
             initial={{ y: 20, opacity: 0 }}

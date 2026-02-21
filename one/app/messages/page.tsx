@@ -1,20 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MessageSquare, Search, X, UserPlus } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue } from "framer-motion";
  
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import { db, app } from "@/lib/firebase";
+import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, where } from "firebase/firestore";
 
 export default function MessagesPage() {
   const { showToast } = useToast();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const router = useRouter();
   const [isNewChat, setIsNewChat] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const userKey = useMemo(() => user?.email || user?.uid || "guest", [user]);
+  const isFirebaseConfigured = useMemo(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const opts = (app.options as any) || {};
+      return Boolean(opts.apiKey && opts.apiKey !== "YOUR_API_KEY");
+    } catch { return false; }
+  }, []);
   
   type Thread = {
     id: string;
@@ -23,6 +32,7 @@ export default function MessagesPage() {
     time: string;
     unread: number;
     createdBy: string;
+    participants?: string[];
   };
   
   type Friend = {
@@ -31,7 +41,26 @@ export default function MessagesPage() {
     avatarColor: string;
   };
   
-  const friends: Friend[] = [];
+  const [friends, setFriends] = useState<Friend[]>([]);
+  useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setFriends([]);
+      return;
+    }
+    const q = query(collection(db, "users"));
+    const unsub = onSnapshot(q, (snap) => {
+      const list: Friend[] = [];
+      snap.forEach(d => {
+        const data = d.data() as { displayName?: string };
+        const email = d.id;
+        const name = data?.displayName || email.split("@")[0];
+        if (email === user?.email) return;
+        list.push({ id: email, name, avatarColor: "bg-gray-200" });
+      });
+      setFriends(list);
+    });
+    return () => unsub();
+  }, [isFirebaseConfigured, user?.email]);
   
   const readThreads = (): Thread[] => {
     try {
@@ -47,8 +76,42 @@ export default function MessagesPage() {
       localStorage.setItem(`threads:${userKey}`, JSON.stringify(list));
     } catch {}
   };
-  
   const [conversations, setConversations] = useState<Thread[]>(readThreads);
+  useEffect(() => {
+    if (!isFirebaseConfigured || !user?.email) return;
+    const q = query(
+      collection(db, "threads"),
+      where("participants", "array-contains", user.email),
+      orderBy("updatedAt", "desc")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const list: Thread[] = [];
+      snap.forEach(d => {
+        const data = d.data() as { names?: string[]; participants?: string[]; lastMessage?: string; updatedAt?: unknown };
+        const names = data?.names || [];
+        const name = names.find(n => n !== (userProfile?.displayName || user?.email?.split("@")[0])) || names[0] || "Chat";
+        let t = "";
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const ts = (data as any).updatedAt;
+          if (ts && typeof ts.toDate === "function") {
+            t = ts.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          }
+        } catch {}
+        list.push({
+          id: d.id,
+          name,
+          lastMessage: data?.lastMessage || "",
+          time: t,
+          unread: 0,
+          createdBy: userKey,
+          participants: data?.participants || []
+        });
+      });
+      setConversations(list);
+    });
+    return () => unsub();
+  }, [isFirebaseConfigured, user?.email, userKey, userProfile?.displayName]);
   
   let seq = 0;
   const genId = () => {
@@ -60,6 +123,25 @@ export default function MessagesPage() {
     if (exists) {
       setIsNewChat(false);
       showToast(`Opened chat with ${f.name}`, "success");
+      router.push(`/messages/${exists.id}`);
+      return;
+    }
+    if (isFirebaseConfigured && user?.email) {
+      const names = [userProfile?.displayName || user.email.split("@")[0], f.name];
+      const participants = [user.email, f.id];
+      addDoc(collection(db, "threads"), {
+        names,
+        participants,
+        lastMessage: "Say hi!",
+        updatedAt: serverTimestamp()
+      }).then(ref => {
+        setIsNewChat(false);
+        showToast(`Started chat with ${f.name}`, "success");
+        router.push(`/messages/${ref.id}`);
+      }).catch(() => {
+        setIsNewChat(false);
+        showToast("Unable to start chat", "error");
+      });
       return;
     }
     const t: Thread = {

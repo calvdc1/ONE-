@@ -60,24 +60,16 @@ export default function Navbar() {
           ONE
         </button>
       </div>
-      <div className="flex-1 max-w-xl mx-6">
-        <input
-          type="text"
-          placeholder="Search"
-          className="w-full px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-sm text-gray-200 placeholder:text-gray-400"
-          onFocus={() => setNotifOpen(false)}
-        />
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-gray-300 text-sm tracking-wide uppercase flex items-center gap-6">
+          <span className="font-extrabold text-metallic-gold">ONE</span>
+          <Link href="/feed" className={`${pathname === '/feed' ? 'text-metallic-gold' : 'hover:text-metallic-gold'}`}>Newsfeed</Link>
+          <Link href="/groups" className={`${pathname?.startsWith('/groups') ? 'text-metallic-gold' : 'hover:text-metallic-gold'}`}>Groups</Link>
+          <Link href="/messages" className={`${pathname?.startsWith('/messages') ? 'text-metallic-gold' : 'hover:text-metallic-gold'}`}>Messenger</Link>
+          <Link href="/profile" className={`${pathname === '/profile' ? 'text-metallic-gold' : 'hover:text-metallic-gold'}`}>Profile</Link>
+        </div>
       </div>
       <div className="flex items-center gap-4 relative">
-        <Link href="/feed" className={`text-gray-300 hover:text-metallic-gold ${pathname === '/feed' ? 'text-metallic-gold' : ''}`} aria-label="Newsfeed">
-          <Home className="w-6 h-6" />
-        </Link>
-        <Link href="/groups" className={`text-gray-300 hover:text-metallic-gold ${pathname?.startsWith('/groups') ? 'text-metallic-gold' : ''}`} aria-label="Groups">
-          <Users className="w-6 h-6" />
-        </Link>
-        <Link href="/messages" className={`text-gray-300 hover:text-metallic-gold ${pathname?.startsWith('/messages') ? 'text-metallic-gold' : ''}`} aria-label="Messages">
-          <MessageSquare className="w-6 h-6" />
-        </Link>
         <div className="relative">
           <button
             type="button"
@@ -121,9 +113,6 @@ export default function Navbar() {
             </div>
           )}
         </div>
-        <Link href="/profile" className={`text-gray-300 hover:text-metallic-gold ${pathname === '/profile' ? 'text-metallic-gold' : ''}`} aria-label="Profile">
-          <User className="w-6 h-6" />
-        </Link>
       </div>
     </nav>
 

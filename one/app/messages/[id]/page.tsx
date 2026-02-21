@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
+import { db, app } from "@/lib/firebase";
+import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, getDoc, updateDoc } from "firebase/firestore";
 
 type Message = {
   id: string;
@@ -31,6 +33,13 @@ export default function ChatPage() {
   const { user } = useAuth();
   const userKey = useMemo(() => user?.email || user?.uid || "guest", [user]);
   const threadId = decodeURIComponent(id);
+  const isFirebaseConfigured = useMemo(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const opts = (app.options as any) || {};
+      return Boolean(opts.apiKey && opts.apiKey !== "YOUR_API_KEY");
+    } catch { return false; }
+  }, []);
 
   const readThreads = (): Thread[] => {
     try {
@@ -61,7 +70,7 @@ export default function ChatPage() {
     } catch {}
   };
 
-  const thread = readThreads().find(t => t.id === threadId) || null;
+  const [thread, setThread] = useState<Thread | null>(readThreads().find(t => t.id === threadId) || null);
   const [messages, setMessages] = useState<Message[]>(readMessages);
   const [text, setText] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -85,6 +94,49 @@ export default function ChatPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]);
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    getDoc(doc(db, "threads", threadId)).then(snap => {
+      if (snap.exists()) {
+        const data = snap.data() as { names?: string[] };
+        const names = data?.names || [];
+        const name = names.find(n => n !== (user?.displayName || user?.email?.split("@")[0])) || names[0] || "Chat";
+        setThread({
+          id: snap.id,
+          name,
+          lastMessage: "",
+          time: "",
+          unread: 0,
+          createdBy: userKey
+        });
+      }
+    }).catch(() => {});
+    const q = query(collection(db, "threads", threadId, "messages"), orderBy("createdAt", "asc"));
+    const unsub = onSnapshot(q, (snap) => {
+      const list: Message[] = [];
+      snap.forEach(d => {
+        const data = d.data() as { fromEmail?: string; text?: string; createdAt?: unknown };
+        let t = "";
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const ts = (data as any).createdAt;
+          if (ts && typeof ts.toDate === "function") {
+            t = ts.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          }
+        } catch {}
+        const from = data?.fromEmail && user?.email && data.fromEmail === user.email ? "me" : "them";
+        list.push({
+          id: d.id,
+          from,
+          text: data?.text || "",
+          time: t
+        });
+      });
+      setMessages(list);
+      requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
+    });
+    return () => unsub();
+  }, [isFirebaseConfigured, threadId, user?.email, user?.displayName, userKey]);
 
   const autoResize = () => {
     const ta = textareaRef.current;
@@ -96,6 +148,21 @@ export default function ChatPage() {
   const send = () => {
     const v = text.trim();
     if (!v) return;
+    if (isFirebaseConfigured && user?.email) {
+      addDoc(collection(db, "threads", threadId, "messages"), {
+        fromEmail: user.email,
+        text: v,
+        createdAt: serverTimestamp()
+      }).then(() => {
+        updateDoc(doc(db, "threads", threadId), {
+          lastMessage: v,
+          updatedAt: serverTimestamp()
+        }).catch(() => {});
+      }).catch(() => {});
+      setText("");
+      requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
+      return;
+    }
     const now = new Date();
     const m: Message = {
       id: `${now.getTime()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -107,7 +174,6 @@ export default function ChatPage() {
     setMessages(next);
     saveMessages(next);
     setText("");
-    // update thread preview
     const list = readThreads();
     const idx = list.findIndex(t => t.id === threadId);
     if (idx >= 0) {
