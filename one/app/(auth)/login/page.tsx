@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -11,8 +11,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showAnim, setShowAnim] = useState(false);
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, user } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (user) {
+      router.push("/feed");
+    }
+  }, [user, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,8 +27,22 @@ export default function LoginPage() {
       await signIn(email, password);
       setShowAnim(true);
       setTimeout(() => { router.push("/feed"); }, 300);
-    } catch {
-      alert("Failed to login. Please check your credentials.");
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      const c = (err?.code || err?.message || "").toString();
+      let msg = "Failed to login. Please check your credentials.";
+      if (c.includes("use-google")) {
+        msg = "This email is registered with Google. Please use 'Continue with Google'.";
+      } else if (c.includes("auth/user-not-found")) {
+        msg = "No account found for this email. Please sign up first.";
+      } else if (c.includes("auth/wrong-password") || c.includes("auth/invalid-credential")) {
+        msg = "Incorrect password. Try again or use 'Forgot password' in Firebase Console.";
+      } else if (c.includes("auth/too-many-requests")) {
+        msg = "Too many attempts. Please wait a moment and try again.";
+      } else if (c.includes("network")) {
+        msg = "Network error. Check your connection and try again.";
+      }
+      alert(msg);
       setLoading(false);
     }
   };

@@ -10,7 +10,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
-  getRedirectResult 
+  getRedirectResult,
+  fetchSignInMethodsForEmail
 } from "firebase/auth";
 import type { FirebaseOptions } from "firebase/app";
 import { auth, db } from "@/lib/firebase";
@@ -348,29 +349,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ((auth.app.options as FirebaseOptions).apiKey !== "YOUR_API_KEY");
       
       if (isFirebaseConfigured) {
-        const cred = await signInWithEmailAndPassword(auth, email, pass);
+        let cred: Awaited<ReturnType<typeof signInWithEmailAndPassword>>;
+        try {
+          cred = await signInWithEmailAndPassword(auth, email, pass);
+        } catch (e: unknown) {
+          // If this email uses Google provider, guide user to use Google sign-in
+          try {
+            const methods = await fetchSignInMethodsForEmail(auth, email);
+            if (methods && methods.includes("google.com")) {
+              const ex = new Error("use-google") as Error & { code?: string };
+              ex.code = "use-google";
+              throw ex;
+            }
+          } catch {}
+          throw e as Error;
+        }
         try {
           const ref = doc(db, "users", email);
           const snap = await getDoc(ref);
-          if (snap.exists()) {
+          const baseProfile: UserProfile = {
+            displayName: email.split("@")[0],
+            username: email.split("@")[0],
+            bio: "Welcome to my profile!",
+            location: "Unknown",
+            website: "",
+            campus: null,
+            createdAt: Date.now(),
+            followers: 0,
+            following: 0,
+            avatarUrl: null,
+            coverUrl: null,
+            settings: {
+              dms: "everyone",
+              visibility: "public",
+              notifications: { likes: true, comments: true, follows: true }
+            }
+          };
+          if (!snap.exists()) {
+            const sv = Date.now();
+            await setDoc(ref, { ...baseProfile, followersList: [], followingList: [], sessionVersion: sv });
+            try { localStorage.setItem(`sessionVersion:${email}`, String(sv)); } catch {}
+            setUser(cred.user);
+            setUserProfile(baseProfile);
+            localStorage.setItem("user_profile", JSON.stringify(baseProfile));
+            upsertUserIndex(baseProfile.displayName, baseProfile);
+          } else {
             const data = snap.data() as Partial<UserProfile> & { followers?: number; following?: number; followersList?: string[]; followingList?: string[]; };
             const prof: UserProfile = {
-              displayName: data.displayName ?? email.split("@")[0],
-              username: data.username ?? email.split("@")[0],
-              bio: data.bio ?? "Welcome to my profile!",
-              location: data.location ?? "Unknown",
-              website: data.website ?? "",
-              campus: data.campus ?? null,
-              createdAt: data.createdAt ?? Date.now(),
+              displayName: data.displayName ?? baseProfile.displayName,
+              username: data.username ?? baseProfile.username,
+              bio: data.bio ?? baseProfile.bio,
+              location: data.location ?? baseProfile.location,
+              website: data.website ?? baseProfile.website,
+              campus: data.campus ?? baseProfile.campus,
+              createdAt: data.createdAt ?? baseProfile.createdAt,
               followers: data.followers ?? 0,
               following: data.following ?? 0,
               avatarUrl: data.avatarUrl ?? null,
               coverUrl: data.coverUrl ?? null,
-              settings: (data as { settings?: UserSettings }).settings ?? {
-                dms: "everyone",
-                visibility: "public",
-                notifications: { likes: true, comments: true, follows: true }
-              }
+              settings: (data as { settings?: UserSettings }).settings ?? baseProfile.settings
             };
             const sv = Date.now();
             try { await updateDoc(ref, { sessionVersion: sv }); } catch {}
