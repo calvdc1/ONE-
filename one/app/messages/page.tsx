@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MessageSquare, Search, X, UserPlus } from "lucide-react";
+import { MessageSquare, Search, X, UserPlus, Star } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue } from "framer-motion";
  
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { db, app } from "@/lib/firebase";
-import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, where } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { createThread } from "@/lib/datastore";
 
 export default function MessagesPage() {
   const { showToast } = useToast();
@@ -77,6 +78,14 @@ export default function MessagesPage() {
     } catch {}
   };
   const [conversations, setConversations] = useState<Thread[]>(readThreads);
+  const pinKey = useMemo(() => `threads:pinned:${userKey}`, [userKey]);
+  const readPinned = (): Set<string> => {
+    try { return new Set(JSON.parse(localStorage.getItem(pinKey) || "[]")); } catch { return new Set(); }
+  };
+  const savePinned = (s: Set<string>) => {
+    try { localStorage.setItem(pinKey, JSON.stringify(Array.from(s))); } catch {}
+  };
+  const [pinned, setPinned] = useState<Set<string>>(readPinned);
   useEffect(() => {
     if (!isFirebaseConfigured || !user?.email) return;
     const q = query(
@@ -129,15 +138,10 @@ export default function MessagesPage() {
     if (isFirebaseConfigured && user?.email) {
       const names = [userProfile?.displayName || user.email.split("@")[0], f.name];
       const participants = [user.email, f.id];
-      addDoc(collection(db, "threads"), {
-        names,
-        participants,
-        lastMessage: "Say hi!",
-        updatedAt: serverTimestamp()
-      }).then(ref => {
+      createThread(participants, names).then(id => {
         setIsNewChat(false);
         showToast(`Started chat with ${f.name}`, "success");
-        router.push(`/messages/${ref.id}`);
+        router.push(`/messages/${id}`);
       }).catch(() => {
         setIsNewChat(false);
         showToast("Unable to start chat", "error");
@@ -190,6 +194,21 @@ export default function MessagesPage() {
     const onClickOpen = () => {
       router.push(`/messages/${chat.id}`);
     };
+    const isPinned = pinned.has(chat.id);
+    const togglePin = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = new Set(pinned);
+      if (next.has(chat.id)) {
+        next.delete(chat.id);
+        showToast("Unpinned", "success");
+      } else {
+        next.add(chat.id);
+        showToast("Pinned", "success");
+      }
+      setPinned(next);
+      savePinned(next);
+    };
     return (
       <div className="relative mb-2">
         <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
@@ -235,7 +254,13 @@ export default function MessagesPage() {
               {chat.lastMessage}
             </p>
           </div>
-          
+          <button
+            onClick={togglePin}
+            className={`ml-3 p-1.5 rounded-full ${isPinned ? "bg-yellow-500/20 text-yellow-400" : "hover:bg-zinc-800 text-gray-400"}`}
+            title={isPinned ? "Unpin" : "Pin"}
+          >
+            <Star className="w-4 h-4" />
+          </button>
           {chat.unread > 0 && (
             <div className="ml-3 bg-blue-600 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
               {chat.unread}
@@ -247,7 +272,7 @@ export default function MessagesPage() {
   };
 
   return (
-    <div className="max-w-xl mx-auto pt-4 pb-24 px-4">
+    <div className="max-w-2xl lg:max-w-3xl mx-auto pt-4 pb-24 px-4">
       <header className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-2">
           <MessageSquare className="w-6 h-6 text-red-600" />
@@ -288,13 +313,8 @@ export default function MessagesPage() {
             }
             if (isFirebaseConfigured && user.email) {
               try {
-                const ref = await addDoc(collection(db, "threads"), {
-                  names: [meName],
-                  participants: [user.email],
-                  lastMessage: "Saved",
-                  updatedAt: serverTimestamp()
-                });
-                router.push(`/messages/${ref.id}`);
+                const id = await createThread([user.email], [meName]);
+                router.push(`/messages/${id}`);
                 return;
               } catch {}
             }
@@ -371,7 +391,9 @@ export default function MessagesPage() {
 
       <div className="space-y-2">
         <AnimatePresence>
-          {conversations.map((chat, index) => (
+          {[...conversations]
+            .sort((a, b) => (pinned.has(b.id) ? 1 : 0) - (pinned.has(a.id) ? 1 : 0))
+            .map((chat, index) => (
             <ChatRow key={chat.id} chat={chat} index={index} />
           ))}
         </AnimatePresence>

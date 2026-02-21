@@ -13,6 +13,7 @@ import {
   serverTimestamp,
   arrayUnion,
   arrayRemove,
+  increment,
 } from "firebase/firestore";
 
 export type DSUser = {
@@ -72,9 +73,9 @@ export async function upsertUser(email: string, data: Partial<DSUser>) {
   const ref = doc(db, "users", email);
   const snap = await getDoc(ref);
   if (snap.exists()) {
-    await updateDoc(ref, data as any);
+    await updateDoc(ref, data as Partial<DSUser>);
   } else {
-    await setDoc(ref, data as any);
+    await setDoc(ref, data as Partial<DSUser>);
   }
 }
 
@@ -85,13 +86,13 @@ export async function followUser(myEmail: string, myDisplay: string, targetDispl
   if (tRes.empty) return;
   const tRef = tRes.docs[0].ref;
   await updateDoc(meRef, {
-    following: arrayIncrementSafe(1),
+    following: increment(1),
     followingList: arrayUnion(targetDisplay),
-  } as any);
+  });
   await updateDoc(tRef, {
-    followers: arrayIncrementSafe(1),
+    followers: increment(1),
     followersList: arrayUnion(myDisplay),
-  } as any);
+  });
   const nColl = collection(db, "users", tRes.docs[0].id, "notifications");
   await addDoc(nColl, {
     type: "follow",
@@ -108,13 +109,13 @@ export async function unfollowUser(myEmail: string, myDisplay: string, targetDis
   if (tRes.empty) return;
   const tRef = tRes.docs[0].ref;
   await updateDoc(meRef, {
-    following: arrayIncrementSafe(-1),
+    following: increment(-1),
     followingList: arrayRemove(targetDisplay),
-  } as any);
+  });
   await updateDoc(tRef, {
-    followers: arrayIncrementSafe(-1),
+    followers: increment(-1),
     followersList: arrayRemove(myDisplay),
-  } as any);
+  });
 }
 
 export async function createPost(author: string, text: string) {
@@ -130,7 +131,11 @@ export async function listPosts(limit?: number) {
   const qBase = query(collection(db, "posts"), orderBy("createdAt", "desc"));
   const snaps = await getDocs(qBase);
   const list: DSPost[] = [];
-  snaps.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
+  snaps.forEach((d) => {
+    const data = d.data() as Partial<DSPost>;
+    const { id: _omit, ...rest } = data;
+    list.push({ id: d.id, ...(rest as Omit<DSPost, "id">) });
+  });
   return typeof limit === "number" ? list.slice(0, limit) : list;
 }
 
@@ -138,7 +143,11 @@ export async function listUserPosts(displayName: string) {
   const qx = query(collection(db, "posts"), where("author", "==", displayName), orderBy("createdAt", "desc"));
   const snaps = await getDocs(qx);
   const list: DSPost[] = [];
-  snaps.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
+  snaps.forEach((d) => {
+    const data = d.data() as Partial<DSPost>;
+    const { id: _omit, ...rest } = data;
+    list.push({ id: d.id, ...(rest as Omit<DSPost, "id">) });
+  });
   return list;
 }
 
@@ -159,7 +168,7 @@ export async function sendMessage(threadId: string, from: string, text: string) 
     createdAt: serverTimestamp(),
   });
   const tRef = doc(db, "threads", threadId);
-  await updateDoc(tRef, { lastMessage: text, updatedAt: serverTimestamp() } as any);
+  await updateDoc(tRef, { lastMessage: text, updatedAt: serverTimestamp() });
   return mRef.id;
 }
 
@@ -167,7 +176,11 @@ export async function listThreadsFor(name: string) {
   const qx = query(collection(db, "threads"), where("participants", "array-contains", name), orderBy("updatedAt", "desc"));
   const snaps = await getDocs(qx);
   const list: DSThread[] = [];
-  snaps.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
+  snaps.forEach((d) => {
+    const data = d.data() as Partial<DSThread>;
+    const { id: _omit, ...rest } = data;
+    list.push({ id: d.id, ...(rest as Omit<DSThread, "id">) });
+  });
   return list;
 }
 
@@ -175,7 +188,11 @@ export async function listMessages(threadId: string) {
   const qx = query(collection(db, "threads", threadId, "messages"), orderBy("createdAt", "asc"));
   const snaps = await getDocs(qx);
   const list: DSMessage[] = [];
-  snaps.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
+  snaps.forEach((d) => {
+    const data = d.data() as Partial<DSMessage>;
+    const { id: _omit, ...rest } = data;
+    list.push({ id: d.id, ...(rest as Omit<DSMessage, "id">) });
+  });
   return list;
 }
 
@@ -188,7 +205,12 @@ export async function addNotification(userEmail: string, n: { type: string; from
   });
 }
 
-function arrayIncrementSafe(delta: number) {
-  return (prev: number | undefined) => Math.max(0, (prev ?? 0) + delta);
+export async function setTyping(threadId: string, email: string, isTyping: boolean) {
+  const tRef = doc(db, "threads", threadId);
+  await updateDoc(tRef, { [`typing.${email}`]: isTyping, updatedAt: serverTimestamp() });
 }
 
+export async function markMessageSeen(threadId: string, messageId: string, email: string) {
+  const mRef = doc(db, "threads", threadId, "messages", messageId);
+  await updateDoc(mRef, { seenBy: arrayUnion(email) });
+}

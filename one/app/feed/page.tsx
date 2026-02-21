@@ -284,25 +284,38 @@ export default function FeedPage() {
     .filter(name => name.toLowerCase().includes(searchQuery.toLowerCase()))
     .slice(0, 12);
 
-  const visiblePosts = posts
-    .filter((p: Post) => !isBlocked(p.user))
-    .filter((p: Post) => (selectedUser ? p.user === selectedUser : true))
-    .sort((a, b) => {
-      const af = isFollowing(a.user) ? 1 : 0;
-      const bf = isFollowing(b.user) ? 1 : 0;
-      return bf - af;
-    });
+  const [sortOrder, setSortOrder] = useState<'following' | 'latest' | 'oldest'>('following');
+  const visiblePosts = (() => {
+    const base = posts
+      .filter((p: Post) => !isBlocked(p.user))
+      .filter((p: Post) => (selectedUser ? p.user === selectedUser : true));
+    const copy = [...base];
+    if (sortOrder === 'latest') {
+      copy.sort((a, b) => (b.id || 0) - (a.id || 0));
+    } else if (sortOrder === 'oldest') {
+      copy.sort((a, b) => (a.id || 0) - (b.id || 0));
+    } else {
+      copy.sort((a, b) => {
+        const af = isFollowing(a.user) ? 1 : 0;
+        const bf = isFollowing(b.user) ? 1 : 0;
+        if (bf !== af) return bf - af;
+        return (b.id || 0) - (a.id || 0);
+      });
+    }
+    return copy;
+  })();
 
   return (
     <Suspense fallback={null}>
     <>
-    <div className="mx-auto max-w-[1200px] px-4 sm:px-6 pt-4 sm:pt-6 pb-24 lg:pb-20">
+    <div className="mx-auto max-w-[1400px] px-4 sm:px-6 pt-4 sm:pt-6 pb-24 lg:pb-20">
       <header className="flex items-center gap-2 mb-4">
         <HomeIcon className="w-6 h-6 text-red-600" />
         <h1 className="text-2xl font-bold text-metallic-gold">ONEMSU</h1>
       </header>
-      <div className="grid lg:grid-cols-[260px_minmax(0,1fr)_300px] gap-6 lg:gap-8">
+      <div className={`grid ${user ? 'lg:grid-cols-[260px_minmax(0,1fr)_300px]' : 'lg:grid-cols-1'} gap-6 lg:gap-8`}>
         {/* Left Sidebar */}
+        {user && (
         <aside className="space-y-4 hidden lg:block">
           <div className="card-dark rounded-xl p-4 animate-fade-in-up">
             <button
@@ -341,9 +354,10 @@ export default function FeedPage() {
             </nav>
           </div>
         </aside>
+        )}
 
         {/* Center Feed */}
-        <main className="max-w-xl mx-auto w-full">
+        <main className="max-w-2xl lg:max-w-3xl mx-auto w-full">
           <div className="card-dark rounded-xl px-4 sm:px-5 py-3 sm:py-4 mb-4 animate-fade-in-up sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-zinc-900/70">
             <header className="flex items-center justify-between">
               <h1 className="text-3xl font-bold text-metallic-gold">Newsfeed</h1>
@@ -368,6 +382,18 @@ export default function FeedPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+            </div>
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <label className="text-sm text-gray-400">Sort</label>
+              <select
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-gray-100 hover:bg-zinc-800 text-sm"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as 'following' | 'latest' | 'oldest')}
+              >
+                <option value="following">Following first</option>
+                <option value="latest">Latest</option>
+                <option value="oldest">Oldest</option>
+              </select>
             </div>
             {searchQuery && (
               <div className="mt-3 max-h-72 overflow-y-auto divide-y divide-zinc-800">
@@ -754,6 +780,7 @@ export default function FeedPage() {
         </main>
 
         {/* Right Sidebar */}
+        {user && (
         <aside className="space-y-4 hidden lg:block">
           <div className="rounded-xl card-dark shadow-sm p-4">
             <div className="font-bold text-metallic-gold mb-2">Discord Server</div>
@@ -779,6 +806,7 @@ export default function FeedPage() {
             </ul>
           </div>
         </aside>
+        )}
       </div>
     </div>
     {editingId !== null && (

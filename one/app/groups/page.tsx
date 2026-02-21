@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Users, Plus, X } from "lucide-react";
+import { Users, Plus, X, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { useToast } from "@/context/ToastContext";
@@ -12,6 +12,8 @@ export default function GroupsPage() {
   const { user } = useAuth();
   const [isCreating, setIsCreating] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+  const [tab, setTab] = useState<"all" | "my">("all");
+  const [query, setQuery] = useState("");
   
   const campusGroups = [
     { slug: "msu-main", display: "MSU Main" },
@@ -109,14 +111,12 @@ export default function GroupsPage() {
   const readGroups = (): Group[] => {
     try {
       const s = localStorage.getItem("groups_list");
-      const parsed: Group[] = s ? JSON.parse(s) : [...campusGroupEntries, ...baseGroups];
-      const hasCampus = parsed.some(g => g.category === "Campus");
-      if (!hasCampus) {
-        const merged = [...campusGroupEntries, ...parsed];
-        try { localStorage.setItem("groups_list", JSON.stringify(merged)); } catch {}
-        return merged;
-      }
-      return parsed;
+      const parsed: Group[] = s ? JSON.parse(s) : [];
+      const nonCampus = parsed.filter(g => g.category !== "Campus");
+      // Always standardize campus group set and order
+      const merged = [...campusGroupEntries, ...nonCampus];
+      try { localStorage.setItem("groups_list", JSON.stringify(merged)); } catch {}
+      return merged.length ? merged : [...campusGroupEntries, ...baseGroups];
     } catch {
       return [...campusGroupEntries, ...baseGroups];
     }
@@ -197,6 +197,10 @@ export default function GroupsPage() {
     showToast("Group created successfully!", "success");
   };
 
+  const displayGroups = groups
+    .filter(g => (tab === "my" ? membership.has(g.slug ?? String(g.id)) : true))
+    .filter(g => g.name.toLowerCase().includes(query.toLowerCase()));
+
   return (
     <div className="max-w-xl mx-auto pt-4 pb-24 px-4">
       <header className="flex justify-between items-center mb-6">
@@ -213,6 +217,33 @@ export default function GroupsPage() {
           Create
         </motion.button>
       </header>
+      
+      <div className="card-dark rounded-xl px-4 py-3 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={() => setTab("all")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${tab === "all" ? "bg-zinc-800 text-gray-100" : "bg-zinc-900 text-gray-300 hover:bg-zinc-800"}`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setTab("my")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${tab === "my" ? "bg-zinc-800 text-gray-100" : "bg-zinc-900 text-gray-300 hover:bg-zinc-800"}`}
+          >
+            My Groups
+          </button>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Search groups..."
+            className="w-full pl-10 pr-4 py-2 rounded-xl input-dark focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      </div>
 
       {/* Create Group Modal */}
       <AnimatePresence>
@@ -265,7 +296,7 @@ export default function GroupsPage() {
       
       <div className="space-y-4">
         <AnimatePresence>
-            {groups.map((group, index) => {
+            {displayGroups.map((group, index) => {
               const slug = group.slug ?? String(group.id);
               const joined = membership.has(slug);
               return (

@@ -73,7 +73,8 @@ export default function Navbar() {
   }, [router, navItems]);
 
   // Ensure consistent SSR/CSR markup: only render navbar once mounted on client and user is known
-  if (!isClient || !user || pathname === "/login") {
+  // Hide on landing page and login
+  if (!isClient || !user || pathname === "/login" || pathname === "/") {
     return null;
   }
   // Render both: a top header for desktop and a bottom bar for mobile
@@ -101,11 +102,11 @@ export default function Navbar() {
         </button>
       </div>
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-gray-300 text-sm tracking-wide uppercase flex items-center gap-6">
+        <div className="text-gray-300 text-sm tracking-wide uppercase flex items-center gap-8">
           <span className="font-extrabold text-metallic-gold">ONE</span>
           <Link href="/feed" className={`${pathname === '/feed' ? 'text-metallic-gold' : 'hover:text-metallic-gold'}`}>Newsfeed</Link>
           <Link href="/groups" className={`${pathname?.startsWith('/groups') ? 'text-metallic-gold' : 'hover:text-metallic-gold'}`}>Groups</Link>
-          <Link href="/messages" className={`${pathname?.startsWith('/messages') ? 'text-metallic-gold' : 'hover:text-metallic-gold'}`}>Messenger</Link>
+          <Link href="/messages" className={`${pathname?.startsWith('/messages') ? 'text-metallic-gold' : 'hover:text-metallic-gold'}`}>Messages</Link>
           <Link href="/profile" className={`${pathname === '/profile' ? 'text-metallic-gold' : 'hover:text-metallic-gold'}`}>Profile</Link>
         </div>
       </div>
@@ -157,88 +158,50 @@ export default function Navbar() {
     </nav>
 
     {/* Mobile bottom bar */}
-    <nav className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 lg:hidden flex items-center gap-2 px-4 py-2 z-50">
-      <button
-        type="button"
-        onClick={() => { router.push('/feed'); router.refresh(); }}
-        className="font-extrabold text-lg text-metallic-gold shrink-0 z-10"
-        aria-label="Go to Newsfeed"
-      >
-        ONE
-      </button>
-      <div className="relative ml-2 mr-2 shrink-0 z-10">
-        <button
-          type="button"
-          onClick={() => setNotifOpen(o => !o)}
-          aria-label="Notifications"
-          className="relative p-2 rounded-lg text-gray-300 hover:text-metallic-gold"
-        >
-          <Bell className="w-6 h-6" />
-          {unread > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">
-              {unread}
-            </span>
-          )}
-        </button>
-        {notifOpen && (
-          <div className="absolute bottom-12 right-0 w-72 max-h-80 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg p-2 z-50">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-gray-200">Notifications</span>
-              <button
-                onClick={() => { if (markAllNotificationsRead) { markAllNotificationsRead(); } }}
-                className="text-xs text-blue-500"
-              >
-                Mark all read
-              </button>
-            </div>
-            {notifications.length === 0 ? (
-              <div className="text-xs text-gray-400 py-6 text-center">No notifications</div>
-            ) : (
-              notifications.map(n => (
-                <div key={n.id} className={`p-2 rounded ${n.read ? '' : 'bg-zinc-800'}`}>
-                  <div className="text-sm text-gray-100">
-                    {n.type === 'follow' && (<span><b>{n.from}</b> followed you</span>)}
-                    {n.type === 'like' && (<span><b>{n.from}</b> liked your post</span>)}
-                    {n.type === 'comment' && (<span><b>{n.from}</b> commented on your post</span>)}
-                    {n.type === 'post' && (<span><b>{n.from}</b> posted a new update</span>)}
-                  </div>
-                  <div className="text-[10px] text-gray-400">{toDisplayTime(n.time)}</div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-      
-      <div className="flex justify-around items-center h-14 flex-1 min-w-0">
-        {navItems.map((item) => {
-          // Check if current path matches the item href or is a sub-path (e.g. /groups/123)
-          // Exception: /feed is somewhat root-like for auth users, but strict matching is safer unless subpages exist
-          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+    <nav className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 lg:hidden grid grid-cols-5 items-center px-2 py-1 z-50">
+      {(() => {
+        const renderItem = (item: { name: string; href: string; icon: typeof Home }) => {
+          const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
           const Icon = item.icon;
-          
           return (
             <Link key={item.name} href={item.href} className="relative group flex flex-col items-center justify-center w-full p-2">
-                {isActive && (
-                    <motion.div
-                        layoutId="nav-pill"
-                    className="absolute inset-0 bg-zinc-800 rounded-xl -z-10"
-                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                )}
-                
+              {isActive && (
                 <motion.div
-                    whileHover={{ scale: 1.1, y: -2 }}
-                    whileTap={{ scale: 0.95 }}
-                  className={`flex flex-col items-center ${isActive ? 'text-metallic-gold' : 'text-gray-400 hover:text-metallic-gold'} transition-colors duration-200`}
-                >
-                  <Icon className="w-6 h-6" strokeWidth={isActive ? 2.5 : 2} />
-                  <span className="text-[11px] mt-1 font-semibold">{item.name}</span>
-                </motion.div>
+                  layoutId="nav-pill"
+                  className="absolute inset-0 bg-zinc-800 rounded-xl -z-10"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <motion.div
+                whileHover={{ scale: 1.1, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                className={`flex flex-col items-center ${isActive ? 'text-metallic-gold' : 'text-gray-400 hover:text-metallic-gold'} transition-colors duration-200`}
+              >
+                <Icon className="w-6 h-6" strokeWidth={isActive ? 2.5 : 2} />
+                <span className="text-[11px] mt-1 font-semibold">{item.name}</span>
+              </motion.div>
             </Link>
           );
-        })}
-      </div>
+        };
+        const feed = navItems[0];
+        const groups = navItems[1];
+        const messages = navItems[2];
+        const profile = navItems[3];
+        const feedActive = pathname === feed.href || pathname?.startsWith(feed.href + "/");
+        return (
+          <>
+            <div className="flex justify-center">{renderItem(feed)}</div>
+            <div className="flex justify-center">{renderItem(groups)}</div>
+            <div className="flex justify-center">
+              <Link href="/feed" aria-label="Go to Newsfeed" className={`font-extrabold text-lg ${feedActive ? 'text-metallic-gold' : 'text-gray-300 hover:text-metallic-gold'}`}>
+                ONE
+              </Link>
+            </div>
+            <div className="flex justify-center">{renderItem(messages)}</div>
+            <div className="flex justify-center">{renderItem(profile)}</div>
+          </>
+        );
+      })()}
     </nav>
     </>
   );

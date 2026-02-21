@@ -1,9 +1,36 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read: if false;
-      allow write: if false;
+    function isSignedIn() { return request.auth != null; }
+    function isOwnerEmail(email) { return isSignedIn() && request.auth.token.email == email; }
+    function inParticipants(thread) {
+      return isSignedIn() && (request.auth.token.email in get(thread).data.participants);
+    }
+
+    match /users/{email} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isOwnerEmail(email);
+
+      match /notifications/{nid} {
+        allow read, write: if isOwnerEmail(email);
+      }
+    }
+
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn();
+    }
+
+    match /threads/{threadId} {
+      allow read: if isSignedIn() && (request.auth.token.email in resource.data.participants);
+      allow create: if isSignedIn() && (request.resource.data.participants has request.auth.token.email);
+      allow update, delete: if isSignedIn() && (request.auth.token.email in resource.data.participants);
+
+      match /messages/{messageId} {
+        allow read: if inParticipants(/databases/$(database)/documents/threads/$(threadId));
+        allow create: if inParticipants(/databases/$(database)/documents/threads/$(threadId));
+        allow update, delete: if inParticipants(/databases/$(database)/documents/threads/$(threadId));
+      }
     }
   }
 }

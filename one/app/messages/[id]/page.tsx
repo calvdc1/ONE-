@@ -7,7 +7,8 @@ import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
 import { db, app } from "@/lib/firebase";
-import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, getDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, getDoc } from "firebase/firestore";
+import { sendMessage, setTyping, markMessageSeen } from "@/lib/datastore";
 
 type Message = {
   id: string;
@@ -76,8 +77,10 @@ export default function ChatPage() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [calling, setCalling] = useState<null | "voice" | "video">(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [typingState, setTypingState] = useState<Record<string, boolean>>({});
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const typingTimer = useRef<number | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -96,9 +99,10 @@ export default function ChatPage() {
   }, [threadId]);
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    getDoc(doc(db, "threads", threadId)).then(snap => {
+    const tRef = doc(db, "threads", threadId);
+    getDoc(tRef).then(snap => {
       if (snap.exists()) {
-        const data = snap.data() as { names?: string[] };
+        const data = snap.data() as { names?: string[]; typing?: Record<string, boolean> };
         const names = data?.names || [];
         const name = names.find(n => n !== (user?.displayName || user?.email?.split("@")[0])) || names[0] || "Chat";
         setThread({
@@ -109,33 +113,45 @@ export default function ChatPage() {
           unread: 0,
           createdBy: userKey
         });
+        if (data?.typing) setTypingState(data.typing);
       }
     }).catch(() => {});
+    const unsubThread = onSnapshot(tRef, s => {
+      const data = s.data() as { typing?: Record<string, boolean> } | undefined;
+      if (data?.typing) setTypingState(data.typing);
+    });
     const q = query(collection(db, "threads", threadId, "messages"), orderBy("createdAt", "asc"));
-    const unsub = onSnapshot(q, (snap) => {
+    const unsubMsgs = onSnapshot(q, (snap) => {
       const list: Message[] = [];
       snap.forEach(d => {
-        const data = d.data() as { fromEmail?: string; text?: string; createdAt?: unknown };
+        const data = d.data() as { fromEmail?: string; from?: string; text?: string; createdAt?: unknown; seenBy?: string[] };
         let t = "";
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const ts = (data as any).createdAt;
-          if (ts && typeof ts.toDate === "function") {
+          const ts = (data as { createdAt?: { toDate?: () => Date } }).createdAt;
+          if (ts && typeof ts?.toDate === "function") {
             t = ts.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
           }
         } catch {}
-        const from = data?.fromEmail && user?.email && data.fromEmail === user.email ? "me" : "them";
+        const sender = data.fromEmail || data.from || "";
+        const from: "me" | "them" = user?.email && sender === user.email ? "me" : "them";
         list.push({
           id: d.id,
           from,
           text: data?.text || "",
-          time: t
+          time: t,
+          seen: Array.isArray(data?.seenBy) && user?.email ? data.seenBy.includes(user.email) : false
         });
+        if (from === "them" && user?.email) {
+          const seenBy = Array.isArray(data?.seenBy) ? data.seenBy : [];
+          if (!seenBy.includes(user.email)) {
+            markMessageSeen(threadId, d.id, user.email).catch(() => {});
+          }
+        }
       });
       setMessages(list);
       requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
     });
-    return () => unsub();
+    return () => { unsubThread(); unsubMsgs(); };
   }, [isFirebaseConfigured, threadId, user?.email, user?.displayName, userKey]);
 
   const autoResize = () => {
@@ -149,16 +165,7 @@ export default function ChatPage() {
     const v = text.trim();
     if (!v) return;
     if (isFirebaseConfigured && user?.email) {
-      addDoc(collection(db, "threads", threadId, "messages"), {
-        fromEmail: user.email,
-        text: v,
-        createdAt: serverTimestamp()
-      }).then(() => {
-        updateDoc(doc(db, "threads", threadId), {
-          lastMessage: v,
-          updatedAt: serverTimestamp()
-        }).catch(() => {});
-      }).catch(() => {});
+      sendMessage(threadId, user.email, v).catch(() => {});
       setText("");
       requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
       return;
@@ -221,7 +228,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="max-w-xl mx-auto pt-4 pb-24 px-4">
+    <div className="max-w-2xl lg:max-w-3xl mx-auto pt-4 pb-24 px-4">
       <header className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           <Link href="/messages" className="bg-zinc-900 text-gray-200 p-2 rounded-lg hover:bg-zinc-800">
@@ -319,6 +326,13 @@ export default function ChatPage() {
             onChange={(e) => {
               setText(e.target.value);
               autoResize();
+              if (isFirebaseConfigured && user?.email) {
+                setTyping(threadId, user.email, true).catch(() => {});
+                if (typingTimer.current) window.clearTimeout(typingTimer.current);
+                typingTimer.current = window.setTimeout(() => {
+                  setTyping(threadId, user.email!, false).catch(() => {});
+                }, 1500);
+              }
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -331,6 +345,9 @@ export default function ChatPage() {
             className="flex-1 input-dark px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-600 resize-none leading-6"
             style={{ overflow: "hidden" }}
           />
+          {isFirebaseConfigured && user?.email && Object.entries(typingState).some(([em, val]) => em !== user.email && val) && (
+            <div className="text-xs text-gray-400 mb-2 mr-2">Typing…</div>
+          )}
           <button
             onClick={send}
             disabled={!text.trim()}

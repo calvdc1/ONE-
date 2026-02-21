@@ -120,10 +120,20 @@ nextjs-portal,
 
 .hero-metallic {
   background-image:
-    radial-gradient(60% 80% at 20% 10%, rgba(248,196,64,0.22), rgba(0,0,0,0) 60%),
-    radial-gradient(60% 80% at 80% 20%, rgba(183,28,28,0.22), rgba(0,0,0,0) 70%),
-    conic-gradient(from 210deg at 50% 50%, rgba(255,215,128,0.05), rgba(0,0,0,0) 25% 75%, rgba(255,215,128,0.06)),
-    linear-gradient(140deg, #2b0000 0%, #4a0b0b 20%, #7a1010 40%, #9c1515 54%, #b01717 62%, #f5d36b 64%, #8b0d0d 68%, #4a0b0b 85%, #200000 100%);
-  background-size: 160% 160%, 160% 160%, 200% 200%, 220% 220%;
-  animation: metallic-shift 18s ease-in-out infinite;
+    radial-gradient(60% 80% at 20% 10%, rgba(248,196,64,0.16), rgba(0,0,0,0) 60%),
+    radial-gradient(60% 80% at 80% 20%, rgba(142,18,18,0.20), rgba(0,0,0,0) 70%),
+    conic-gradient(from 210deg at 50% 50%, rgba(230,200,140,0.04), rgba(0,0,0,0) 25% 75%, rgba(230,200,140,0.05)),
+    linear-gradient(140deg,
+      #180305 0%,
+      #260407 12%,
+      #36060a 24%,
+      #4b080d 36%,
+      #5e0a10 46%,
+      rgba(240,210,150,0.06) 48%,
+      #4f0910 50%,
+      #3b070a 66%,
+      #240407 82%,
+      #120204 100%);
+  background-size: 160% 160%, 160% 160%, 220% 220%, 240% 240%;
+  animation: metallic-shift 22s ease-in-out infinite;
 }

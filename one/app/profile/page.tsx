@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Settings, MapPin, Calendar, Edit, LogOut, X, Save, Image as ImageIcon, User as UserIcon, MoreHorizontal } from "lucide-react";
+import { Settings, MapPin, Calendar, Edit, LogOut, X, Save, Image as ImageIcon, User as UserIcon, MoreHorizontal, Share2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
@@ -250,7 +250,7 @@ export default function ProfilePage() {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="max-w-xl mx-auto pb-24"
+      className="mx-auto max-w-4xl lg:max-w-5xl px-4 pb-24"
     >
       {!displayProfile ? (
         <div className="p-4 text-center">Loading profile...</div>
@@ -310,6 +310,20 @@ export default function ProfilePage() {
                       <Edit className="w-4 h-4 mr-2" />
                       Edit Profile
                     </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        const link = typeof window !== "undefined"
+                          ? `${window.location.origin}/profile?user=${encodeURIComponent(displayProfile.displayName)}`
+                          : `/profile?user=${encodeURIComponent(displayProfile.displayName)}`;
+                        navigator.clipboard.writeText(link);
+                        showToast("Profile link copied", "success");
+                      }}
+                      className="bg-zinc-800 text-gray-100 p-2 rounded-lg hover:bg-zinc-700 transition"
+                      title="Share Profile"
+                    >
+                      <Share2 className="w-5 h-5" />
+                    </motion.button>
                     <motion.button 
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
@@ -340,6 +354,20 @@ export default function ProfilePage() {
                       className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${isFollowing(displayProfile.displayName) ? "bg-gray-100 text-gray-700 hover:bg-gray-200" : "bg-blue-600 text-white hover:bg-blue-700"}`}
                     >
                       {isFollowing(displayProfile.displayName) ? "Following" : "Follow"}
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        const link = typeof window !== "undefined"
+                          ? `${window.location.origin}/profile?user=${encodeURIComponent(displayProfile.displayName)}`
+                          : `/profile?user=${encodeURIComponent(displayProfile.displayName)}`;
+                        navigator.clipboard.writeText(link);
+                        showToast("Profile link copied", "success");
+                      }}
+                      className="bg-zinc-800 text-gray-100 p-2 rounded-lg hover:bg-zinc-700 transition"
+                      title="Share Profile"
+                    >
+                      <Share2 className="w-5 h-5" />
                     </motion.button>
                     <motion.button
                       whileTap={{ scale: 0.95 }}
