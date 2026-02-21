@@ -8,7 +8,9 @@ import {
   signOut as firebaseSignOut,
   User,
   GoogleAuthProvider,
-  signInWithPopup 
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult 
 } from "firebase/auth";
 import type { FirebaseOptions } from "firebase/app";
 import { auth, db } from "@/lib/firebase";
@@ -377,10 +379,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ((auth.app.options as FirebaseOptions).apiKey !== "YOUR_API_KEY");
     if (!isFirebaseConfigured) throw new Error("unavailable");
     const provider = new GoogleAuthProvider();
-    const cred = await signInWithPopup(auth, provider);
+    provider.setCustomParameters({ prompt: "select_account" });
+    let cred: Awaited<ReturnType<typeof signInWithPopup>>;
+    try {
+      cred = await signInWithPopup(auth, provider);
+    } catch (e: unknown) {
+      const err = e as { code?: string };
+      const c = err?.code;
+      if (c && (c.includes("popup-blocked") || c.includes("cancelled-popup-request"))) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      throw e as Error;
+    }
+    setUser(cred.user);
     const email = cred.user.email as string;
     const ref = doc(db, "users", email);
-    const snap = await getDoc(ref);
+    let snap;
+    try { snap = await getDoc(ref); } catch { snap = undefined; }
     const baseProfile: UserProfile = {
       displayName: cred.user.displayName || email.split("@")[0],
       username: (cred.user.displayName || email.split("@")[0]).replace(/\s+/g, "").toLowerCase(),
@@ -395,36 +411,104 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       coverUrl: null
     };
     const sv = Date.now();
-    if (!snap.exists()) {
-      await setDoc(ref, { ...baseProfile, followersList: [], followingList: [], sessionVersion: sv });
+    try {
+      if (!snap || !snap.exists()) {
+        await setDoc(ref, { ...baseProfile, followersList: [], followingList: [], sessionVersion: sv });
+        setUserProfile(baseProfile);
+        localStorage.setItem("user_profile", JSON.stringify(baseProfile));
+        upsertUserIndex(baseProfile.displayName, baseProfile);
+      } else {
+        const data = snap.data() as Partial<UserProfile> & { followersList?: string[]; followingList?: string[] };
+        const prof: UserProfile = {
+          displayName: data.displayName ?? baseProfile.displayName,
+          username: data.username ?? baseProfile.username,
+          bio: data.bio ?? baseProfile.bio,
+          location: data.location ?? baseProfile.location,
+          website: data.website ?? baseProfile.website,
+          campus: data.campus ?? baseProfile.campus,
+          createdAt: data.createdAt ?? baseProfile.createdAt,
+          followers: data.followers ?? 0,
+          following: data.following ?? 0,
+          avatarUrl: data.avatarUrl ?? null,
+          coverUrl: data.coverUrl ?? null
+        };
+        await updateDoc(ref, { sessionVersion: sv });
+        setUserProfile(prof);
+        localStorage.setItem("user_profile", JSON.stringify(prof));
+        if (data.followersList) localStorage.setItem(`followers_of:${prof.displayName}`, JSON.stringify(data.followersList));
+        if (data.followingList) localStorage.setItem(`following_of:${prof.displayName}`, JSON.stringify(data.followingList));
+        upsertUserIndex(prof.displayName, prof);
+      }
+    } catch {
       setUserProfile(baseProfile);
       localStorage.setItem("user_profile", JSON.stringify(baseProfile));
       upsertUserIndex(baseProfile.displayName, baseProfile);
-    } else {
-      const data = snap.data() as Partial<UserProfile> & { followersList?: string[]; followingList?: string[] };
-      const prof: UserProfile = {
-        displayName: data.displayName ?? baseProfile.displayName,
-        username: data.username ?? baseProfile.username,
-        bio: data.bio ?? baseProfile.bio,
-        location: data.location ?? baseProfile.location,
-        website: data.website ?? baseProfile.website,
-        campus: data.campus ?? baseProfile.campus,
-        createdAt: data.createdAt ?? baseProfile.createdAt,
-        followers: data.followers ?? 0,
-        following: data.following ?? 0,
-        avatarUrl: data.avatarUrl ?? null,
-        coverUrl: data.coverUrl ?? null
-      };
-      await updateDoc(ref, { sessionVersion: sv });
-      setUserProfile(prof);
-      localStorage.setItem("user_profile", JSON.stringify(prof));
-      if (data.followersList) localStorage.setItem(`followers_of:${prof.displayName}`, JSON.stringify(data.followersList));
-      if (data.followingList) localStorage.setItem(`following_of:${prof.displayName}`, JSON.stringify(data.followingList));
-      upsertUserIndex(prof.displayName, prof);
     }
     try { localStorage.setItem(`sessionVersion:${email}`, String(sv)); } catch {}
-    setUser(cred.user);
   };
+
+  useEffect(() => {
+    const isFirebaseConfigured =
+      Boolean(auth && auth.app && auth.app.options) &&
+      ((auth.app.options as FirebaseOptions).apiKey !== "YOUR_API_KEY");
+    if (!isFirebaseConfigured) return;
+    getRedirectResult(auth).then(async (res) => {
+      if (!res) return;
+      setUser(res.user);
+      const email = res.user.email as string;
+      const ref = doc(db, "users", email);
+      let snap;
+      try { snap = await getDoc(ref); } catch { snap = undefined; }
+      const baseProfile: UserProfile = {
+        displayName: res.user.displayName || email.split("@")[0],
+        username: (res.user.displayName || email.split("@")[0]).replace(/\s+/g, "").toLowerCase(),
+        bio: "Welcome to my profile!",
+        location: "Unknown",
+        website: "",
+        campus: null,
+        createdAt: Date.now(),
+        followers: 0,
+        following: 0,
+        avatarUrl: null,
+        coverUrl: null
+      };
+      const sv = Date.now();
+      try {
+        if (!snap || !snap.exists()) {
+          await setDoc(ref, { ...baseProfile, followersList: [], followingList: [], sessionVersion: sv });
+          setUserProfile(baseProfile);
+          localStorage.setItem("user_profile", JSON.stringify(baseProfile));
+          upsertUserIndex(baseProfile.displayName, baseProfile);
+        } else {
+          const data = snap.data() as Partial<UserProfile> & { followersList?: string[]; followingList?: string[] };
+          const prof: UserProfile = {
+            displayName: data.displayName ?? baseProfile.displayName,
+            username: data.username ?? baseProfile.username,
+            bio: data.bio ?? baseProfile.bio,
+            location: data.location ?? baseProfile.location,
+            website: data.website ?? baseProfile.website,
+            campus: data.campus ?? baseProfile.campus,
+            createdAt: data.createdAt ?? baseProfile.createdAt,
+            followers: data.followers ?? 0,
+            following: data.following ?? 0,
+            avatarUrl: data.avatarUrl ?? null,
+            coverUrl: data.coverUrl ?? null
+          };
+          await updateDoc(ref, { sessionVersion: sv });
+          setUserProfile(prof);
+          localStorage.setItem("user_profile", JSON.stringify(prof));
+          if (data.followersList) localStorage.setItem(`followers_of:${prof.displayName}`, JSON.stringify(data.followersList));
+          if (data.followingList) localStorage.setItem(`following_of:${prof.displayName}`, JSON.stringify(data.followingList));
+          upsertUserIndex(prof.displayName, prof);
+        }
+      } catch {
+        setUserProfile(baseProfile);
+        localStorage.setItem("user_profile", JSON.stringify(baseProfile));
+        upsertUserIndex(baseProfile.displayName, baseProfile);
+      }
+      try { localStorage.setItem(`sessionVersion:${email}`, String(sv)); } catch {}
+    });
+  }, []);
 
   const signUp = async (email: string, pass: string, profile?: Partial<UserProfile>) => {
     try {

@@ -101,8 +101,10 @@ export default function LoginPage() {
                 await signInWithGoogle();
                 setShowAnim(true);
                 setTimeout(() => { router.push("/feed"); }, 300);
-              } catch {
-                alert("Google sign-in failed.");
+              } catch (e: unknown) {
+                const err = e as { code?: string; message?: string };
+                const msg = err?.code ? `${err.code}: ${err.message || "Google sign-in failed"}` : "Google sign-in failed";
+                alert(msg);
                 setLoading(false);
               }
             }}
@@ -118,9 +120,10 @@ export default function LoginPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
+          className="mt-6 text-center text-sm text-rose-700"
         >
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-blue-600 font-semibold hover:underline">
+          <Link href="/signup" className="text-rose-800 font-semibold hover:underline">
             Sign up
           </Link>
         </motion.div>
