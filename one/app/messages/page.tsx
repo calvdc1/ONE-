@@ -25,6 +25,23 @@ export default function MessagesPage() {
       return Boolean(opts.apiKey && opts.apiKey !== "YOUR_API_KEY");
     } catch { return false; }
   }, []);
+  if (!isFirebaseConfigured) {
+    return (
+      <div className="max-w-2xl lg:max-w-3xl mx-auto pt-4 pb-24 px-4">
+        <header className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-6 h-6 text-red-600" />
+            <h1 className="text-2xl font-bold text-metallic-gold">Messages</h1>
+          </div>
+        </header>
+        <div className="card-dark rounded-xl p-6 shadow-sm">
+          <p className="text-sm text-gray-300">
+            Messaging requires Firebase to be configured. Please add Firebase environment variables to your deployment.
+          </p>
+        </div>
+      </div>
+    );
+  }
   
   type Thread = {
     id: string;
@@ -148,19 +165,7 @@ export default function MessagesPage() {
       });
       return;
     }
-    const t: Thread = {
-      id: genId(),
-      name: f.name,
-      lastMessage: "Say hi!",
-      time: "",
-      unread: 0,
-      createdBy: userKey
-    };
-    const next = [t, ...conversations];
-    setConversations(next);
-    saveThreads(next);
-    setIsNewChat(false);
-    showToast(`Started chat with ${f.name}`, "success");
+    showToast("Messaging requires Firebase to be configured", "error");
   };
 
   // handled entirely via friend list; search box filters available friends
@@ -318,11 +323,7 @@ export default function MessagesPage() {
                 return;
               } catch {}
             }
-            const t: Thread = { id: genId(), name: meName, lastMessage: "Saved", time: "", unread: 0, createdBy: userKey };
-            const next = [t, ...conversations];
-            setConversations(next);
-            saveThreads(next);
-            router.push(`/messages/${encodeURIComponent(t.id)}`);
+            showToast("Messaging requires Firebase to be configured", "error");
           }}
           className="bg-zinc-900 text-gray-100 px-4 py-2 rounded-full shadow hover:bg-zinc-800"
         >

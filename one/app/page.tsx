@@ -129,15 +129,12 @@ export default function Home() {
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 0.9, y: [0, -6, 0], x: [0, 4, 0] }}
           transition={{ duration: 4 + (i % 4), repeat: Infinity }}
-          className="absolute"
+          className="absolute pointer-events-none select-none"
+          aria-hidden="true"
         >
-          <Link
-            href={`/groups/${encodeURIComponent(c.slug)}`}
-            className="px-2.5 py-1 rounded-full text-[11px] font-semibold border border-amber-400/30 bg-amber-100/10 text-amber-200 backdrop-blur hover:bg-amber-100/20 hover:text-amber-100 transition"
-            title={`Open ${c.text} Group`}
-          >
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold border border-amber-400/30 bg-amber-100/10 text-amber-200 backdrop-blur">
             {c.text}
-          </Link>
+          </span>
         </motion.div>
       ))}
       <motion.div

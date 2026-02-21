@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Users, Send, Heart, MessageCircle, Share2, Plus, X, Image as ImageIcon, Mic, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -8,6 +8,9 @@ import Image from "next/image";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { useParams } from "next/navigation";
+import { app, db, storage } from "@/lib/firebase";
+import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, where } from "firebase/firestore";
+import { getDownloadURL, ref as storageRef, uploadString } from "firebase/storage";
 
 export default function GroupDetailsPage() {
   const params = useParams<{ id: string }>();
@@ -86,39 +89,53 @@ export default function GroupDetailsPage() {
     liked: boolean;
     campus?: string;
   };
-  const readAllPosts = (): PostG[] => {
+  const isFirebaseConfigured = useMemo(() => {
     try {
-      const s = typeof window !== "undefined" ? localStorage.getItem("posts") : null;
-      return s ? (JSON.parse(s) as PostG[]) : [];
-    } catch { return []; }
-  };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const opts = (app.options as any) || {};
+      return Boolean(opts.apiKey && opts.apiKey !== "YOUR_API_KEY");
+    } catch { return false; }
+  }, []);
 
-  const [posts, setPosts] = useState(() => {
-    if (isCampusGroup) {
-      const all = readAllPosts();
-      return all.filter((p) => p.campus === campusName);
+  const [posts, setPosts] = useState<PostG[]>([]);
+
+  useEffect(() => {
+    if (!isCampusGroup) {
+      setPosts([]);
+      return;
     }
-    return [
-      {
-        id: 1,
-        user: "John Smith",
-        content: "Anyone have the schedule for the upcoming tech talk?",
-        time: "1h ago",
-        likes: 12,
-        comments: 3,
-        liked: false
-      },
-      {
-        id: 2,
-        user: "Sarah Lee",
-        content: "Looking for team members for the hackathon! PM me if interested.",
-        time: "3h ago",
-        likes: 24,
-        comments: 8,
-        liked: true
-      }
-    ];
-  });
+    if (isFirebaseConfigured) {
+      const qx = query(
+        collection(db, "groupPosts"),
+        where("groupSlug", "==", slug),
+        orderBy("createdAt", "desc")
+      );
+      const unsub = onSnapshot(qx, (snap) => {
+        const arr: PostG[] = [];
+        snap.forEach((d) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const data = d.data() as any;
+          arr.push({
+            id: Date.parse(String(data.createdAt?.toDate?.() || new Date())) || Date.now(),
+            user: data.author || "Unknown",
+            content: data.content || "",
+            imageUrl: data.imageUrl,
+            audioDataUrl: undefined,
+            time: data.createdAt?.toDate?.()?.toLocaleString?.() || "Just now",
+            likes: data.likes || 0,
+            comments: data.comments || 0,
+            liked: false,
+            campus: campusName,
+          });
+        });
+        setPosts(arr);
+      });
+      return () => unsub();
+    } else {
+      // No demo mode here for groups; if not configured, keep empty list
+      setPosts([]);
+    }
+  }, [isCampusGroup, isFirebaseConfigured, campusName, slug]);
 
   const [isPosting, setIsPosting] = useState(false);
   const [newPostContent, setNewPostContent] = useState("");
@@ -148,30 +165,34 @@ export default function GroupDetailsPage() {
     setGroup(prev => ({ ...prev, joined }));
   };
 
-  const handlePost = (e: React.FormEvent) => {
+  const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPostContent.trim()) return;
 
-    const newPost = {
-      id: Date.now(),
-      user: user?.displayName || user?.email?.split("@")[0] || "Me",
-      content: newPostContent,
-      imageDataUrl: newPostImageData || (newPostImageUrl.trim() ? newPostImageUrl.trim() : undefined),
-      audioDataUrl: newPostAudioData || undefined,
-      time: "Just now",
-      likes: 0,
-      comments: 0,
-      liked: false
-    };
-
-    const withCampus = isCampusGroup ? { ...newPost, campus: campusName } : newPost;
-    const next = [withCampus, ...posts];
-    setPosts(next);
-    if (isCampusGroup) {
-      try {
-        const all = readAllPosts();
-        localStorage.setItem("posts", JSON.stringify([withCampus, ...all]));
-      } catch {}
+    if (isCampusGroup && isFirebaseConfigured) {
+      const author = user?.displayName || user?.email?.split("@")[0] || "Me";
+      let imgUrl: string | undefined = undefined;
+      if (newPostImageData) {
+        try {
+          const r = storageRef(storage, `groupPosts/${slug}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.png`);
+          await uploadString(r, newPostImageData, "data_url");
+          imgUrl = await getDownloadURL(r);
+        } catch {}
+      } else if (newPostImageUrl.trim()) {
+        imgUrl = newPostImageUrl.trim();
+      }
+      const payload = {
+        groupSlug: slug,
+        author,
+        content: newPostContent,
+        imageUrl: imgUrl || null,
+        createdAt: serverTimestamp(),
+        likes: 0,
+        comments: 0,
+      };
+      await addDoc(collection(db, "groupPosts"), payload);
+    } else {
+      // If not campus group or not configured, do nothing to avoid demo mode
     }
     setNewPostContent("");
     setNewPostImageUrl("");
@@ -179,7 +200,7 @@ export default function GroupDetailsPage() {
     setNewPostAudioData("");
     setRecording(false);
     setIsPosting(false);
-    showToast("Posted to group!", "success");
+    showToast(isFirebaseConfigured ? "Posted to group!" : "Configure Firebase to post", isFirebaseConfigured ? "success" : "error");
   };
 
   const toggleLike = (postId: number) => {

@@ -52,15 +52,7 @@ export default function FeedPage() {
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   
   const defaultPosts: Post[] = [];
-  const [posts, setPosts] = useState<Post[]>(() => {
-    try {
-      const s = typeof window !== "undefined" ? localStorage.getItem("posts") : null;
-      const arr = s ? (JSON.parse(s) as Post[]) : defaultPosts;
-      return arr.map(p => ({ ...p, commentsList: p.commentsList ?? [] }));
-    } catch {
-      return [];
-    }
-  });
+  const [posts, setPosts] = useState<Post[]>([]);
   const [docIdByPostId, setDocIdByPostId] = useState<Record<number, string>>({});
 
   const isFirebaseConfigured = (() => {
@@ -170,6 +162,7 @@ export default function FeedPage() {
     e.preventDefault();
     if (!user) { showToast("Log in to post", "error"); return; }
     if (!newPostContent.trim()) return;
+    if (!isFirebaseConfigured) { showToast("Posting requires Firebase to be configured", "error"); return; }
 
     const newPost: Post = {
       id: Date.now(),
@@ -188,36 +181,28 @@ export default function FeedPage() {
 
     let imgUrl: string | undefined = newPost.imageUrl;
     let audUrl: string | undefined = undefined;
-    if (isFirebaseConfigured) {
-      try {
-        if (newPost.imageDataUrl) {
-          const r = storageRef(storage, `uploads/images/${(user?.uid || user?.email || "user").replace(/[^a-zA-Z0-9_-]/g, "_")}/${newPost.id}.png`);
-          await uploadString(r, newPost.imageDataUrl, "data_url");
-          imgUrl = await getDownloadURL(r);
-        }
-        if (newPost.audioDataUrl) {
-          const r = storageRef(storage, `uploads/audio/${(user?.uid || user?.email || "user").replace(/[^a-zA-Z0-9_-]/g, "_")}/${newPost.id}.webm`);
-          await uploadString(r, newPost.audioDataUrl, "data_url");
-          audUrl = await getDownloadURL(r);
-        }
-      } catch {
-        // If upload fails, continue with local fallback below
+    try {
+      if (newPost.imageDataUrl) {
+        const r = storageRef(storage, `uploads/images/${(user?.uid || user?.email || "user").replace(/[^a-zA-Z0-9_-]/g, "_")}/${newPost.id}.png`);
+        await uploadString(r, newPost.imageDataUrl, "data_url");
+        imgUrl = await getDownloadURL(r);
       }
-      const payload = {
-        ...newPost,
-        imageUrl: imgUrl || newPost.imageUrl,
-        imageDataUrl: undefined,
-        audioDataUrl: audUrl ? undefined : newPost.audioDataUrl,
-        createdAt: serverTimestamp()
-      };
-      try {
-        await addDoc(collection(db, "posts"), payload);
-      } catch {
-        savePosts([newPost, ...posts]);
+      if (newPost.audioDataUrl) {
+        const r = storageRef(storage, `uploads/audio/${(user?.uid || user?.email || "user").replace(/[^a-zA-Z0-9_-]/g, "_")}/${newPost.id}.webm`);
+        await uploadString(r, newPost.audioDataUrl, "data_url");
+        audUrl = await getDownloadURL(r);
       }
-    } else {
-      savePosts([newPost, ...posts]);
+    } catch {
+      // proceed without uploads
     }
+    const payload = {
+      ...newPost,
+      imageUrl: imgUrl || newPost.imageUrl,
+      imageDataUrl: undefined,
+      audioDataUrl: audUrl ? undefined : newPost.audioDataUrl,
+      createdAt: serverTimestamp()
+    };
+    await addDoc(collection(db, "posts"), payload);
     try {
       const followers = listFollowers();
       followers.forEach(f => notify(f, { type: "post", from: newPost.user, postId: newPost.id }));
@@ -313,6 +298,11 @@ export default function FeedPage() {
         <HomeIcon className="w-6 h-6 text-red-600" />
         <h1 className="text-2xl font-bold text-metallic-gold">ONEMSU</h1>
       </header>
+      {!isFirebaseConfigured && (
+        <div className="mb-4 p-4 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-800">
+          Cloud mode is disabled. Set Firebase environment variables in your deployment to enable posting and real-time feed.
+        </div>
+      )}
       <div className={`grid ${user ? 'lg:grid-cols-[260px_minmax(0,1fr)_300px]' : 'lg:grid-cols-1'} gap-6 lg:gap-8`}>
         {/* Left Sidebar */}
         {user && (
