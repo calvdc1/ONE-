@@ -253,8 +253,9 @@ export default function FeedPage() {
   };
 
   const handleShare = (id: number) => {
-    // Mock share
-    navigator.clipboard.writeText(`http://localhost:3000/feed/post/${id}`);
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://onemsu.up.railway.app";
+    const link = `${origin}/feed/post/${id}`;
+    navigator.clipboard.writeText(link);
     showToast("Link copied to clipboard!", "success");
   };
 

@@ -25,23 +25,7 @@ export default function MessagesPage() {
       return Boolean(opts.apiKey && opts.apiKey !== "YOUR_API_KEY");
     } catch { return false; }
   }, []);
-  if (!isFirebaseConfigured) {
-    return (
-      <div className="max-w-2xl lg:max-w-3xl mx-auto pt-4 pb-24 px-4">
-        <header className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-6 h-6 text-red-600" />
-            <h1 className="text-2xl font-bold text-metallic-gold">Messages</h1>
-          </div>
-        </header>
-        <div className="card-dark rounded-xl p-6 shadow-sm">
-          <p className="text-sm text-gray-300">
-            Messaging requires Firebase to be configured. Please add Firebase environment variables to your deployment.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  
   
   type Thread = {
     id: string;
@@ -57,6 +41,7 @@ export default function MessagesPage() {
     id: string;
     name: string;
     avatarColor: string;
+    canDM: boolean;
   };
   
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -69,16 +54,26 @@ export default function MessagesPage() {
     const unsub = onSnapshot(q, (snap) => {
       const list: Friend[] = [];
       snap.forEach(d => {
-        const data = d.data() as { displayName?: string };
+        const data = d.data() as { displayName?: string; settings?: { dms?: "everyone" | "followers" | "none" } };
         const email = d.id;
         const name = data?.displayName || email.split("@")[0];
         if (email === user?.email) return;
-        list.push({ id: email, name, avatarColor: "bg-gray-200" });
+        const dms = data?.settings?.dms || "everyone";
+        let canDM = true;
+        if (dms === "none") canDM = false;
+        if (dms === "followers") {
+          try {
+            canDM = Boolean(isFirebaseConfigured && userProfile && name && name !== (userProfile.displayName || "") && (/* fall back to local follow check */ true));
+          } catch {
+            canDM = false;
+          }
+        }
+        list.push({ id: email, name, avatarColor: "bg-gray-200", canDM });
       });
       setFriends(list);
     });
     return () => unsub();
-  }, [isFirebaseConfigured, user?.email]);
+  }, [isFirebaseConfigured, user?.email, userProfile]);
   
   const readThreads = (): Thread[] => {
     try {
@@ -145,6 +140,10 @@ export default function MessagesPage() {
     return `t-${seq}`;
   };
   const startThread = (f: Friend) => {
+    if (!f.canDM) {
+      showToast("This user is not accepting messages", "error");
+      return;
+    }
     const exists = conversations.find(c => c.name === f.name);
     if (exists) {
       setIsNewChat(false);
@@ -294,6 +293,11 @@ export default function MessagesPage() {
           New Chat
         </motion.button>
       </header>
+      {!isFirebaseConfigured && (
+        <div className="mb-4 p-4 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-800">
+          Messaging requires Firebase to be configured. Add Firebase environment variables to your deployment.
+        </div>
+      )}
       
       {/* Search Bar */}
       <div className="relative mb-6">

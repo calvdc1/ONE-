@@ -17,6 +17,16 @@ import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc, getDocs, query, where, arrayUnion, arrayRemove, addDoc, collection, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 
+export interface UserSettings {
+  dms: "everyone" | "followers" | "none";
+  visibility: "public" | "msu" | "private";
+  notifications: {
+    likes: boolean;
+    comments: boolean;
+    follows: boolean;
+  };
+}
+
 export interface UserProfile {
   displayName: string;
   username: string;
@@ -29,6 +39,7 @@ export interface UserProfile {
   following?: number;
   avatarUrl?: string | null;
   coverUrl?: string | null;
+  settings?: UserSettings;
 }
 
 type NotificationItem = {
@@ -95,6 +106,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (parsed.following === undefined) parsed.following = 0;
       if (parsed.avatarUrl === undefined) parsed.avatarUrl = null;
       if (parsed.coverUrl === undefined) parsed.coverUrl = null;
+      if (!parsed.settings) {
+        parsed.settings = {
+          dms: "everyone",
+          visibility: "public",
+          notifications: { likes: true, comments: true, follows: true }
+        };
+      }
       localStorage.setItem("user_profile", JSON.stringify(parsed));
       return parsed;
     } catch {
@@ -200,7 +218,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 followers: data.followers ?? 0,
                 following: data.following ?? 0,
                 avatarUrl: data.avatarUrl ?? null,
-                coverUrl: data.coverUrl ?? null
+                coverUrl: data.coverUrl ?? null,
+                settings: (data as { settings?: UserSettings }).settings ?? {
+                  dms: "everyone",
+                  visibility: "public",
+                  notifications: { likes: true, comments: true, follows: true }
+                }
               };
               setUserProfile(prof);
               localStorage.setItem("user_profile", JSON.stringify(prof));
@@ -237,6 +260,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (parsed.following === undefined) parsed.following = 0;
         if (parsed.avatarUrl === undefined) parsed.avatarUrl = null;
         if (parsed.coverUrl === undefined) parsed.coverUrl = null;
+        if (!parsed.settings) {
+          parsed.settings = {
+            dms: "everyone",
+            visibility: "public",
+            notifications: { likes: true, comments: true, follows: true }
+          };
+        }
         setUserProfile(parsed);
         localStorage.setItem("user_profile", JSON.stringify(parsed));
       }
@@ -335,7 +365,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               followers: data.followers ?? 0,
               following: data.following ?? 0,
               avatarUrl: data.avatarUrl ?? null,
-              coverUrl: data.coverUrl ?? null
+              coverUrl: data.coverUrl ?? null,
+              settings: (data as { settings?: UserSettings }).settings ?? {
+                dms: "everyone",
+                visibility: "public",
+                notifications: { likes: true, comments: true, follows: true }
+              }
             };
             const sv = Date.now();
             try { await updateDoc(ref, { sessionVersion: sv }); } catch {}
@@ -362,6 +397,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const profileRaw = localStorage.getItem(`user_profile:${email}`);
         if (profileRaw) {
           const parsed: UserProfile = JSON.parse(profileRaw);
+          if (!parsed.settings) {
+            parsed.settings = {
+              dms: "everyone",
+              visibility: "public",
+              notifications: { likes: true, comments: true, follows: true }
+            };
+          }
           setUserProfile(parsed);
           localStorage.setItem("user_profile", JSON.stringify(parsed));
           upsertUserIndex(parsed.displayName, parsed);
@@ -408,7 +450,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       followers: 0,
       following: 0,
       avatarUrl: null,
-      coverUrl: null
+      coverUrl: null,
+      settings: {
+        dms: "everyone",
+        visibility: "public",
+        notifications: { likes: true, comments: true, follows: true }
+      }
     };
     const sv = Date.now();
     try {
@@ -430,7 +477,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           followers: data.followers ?? 0,
           following: data.following ?? 0,
           avatarUrl: data.avatarUrl ?? null,
-          coverUrl: data.coverUrl ?? null
+          coverUrl: data.coverUrl ?? null,
+          settings: (data as { settings?: UserSettings }).settings ?? {
+            dms: "everyone",
+            visibility: "public",
+            notifications: { likes: true, comments: true, follows: true }
+          }
         };
         await updateDoc(ref, { sessionVersion: sv });
         setUserProfile(prof);
@@ -470,7 +522,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         followers: 0,
         following: 0,
         avatarUrl: null,
-        coverUrl: null
+        coverUrl: null,
+        settings: {
+          dms: "everyone",
+          visibility: "public",
+          notifications: { likes: true, comments: true, follows: true }
+        }
       };
       const sv = Date.now();
       try {
@@ -492,7 +549,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             followers: data.followers ?? 0,
             following: data.following ?? 0,
             avatarUrl: data.avatarUrl ?? null,
-            coverUrl: data.coverUrl ?? null
+            coverUrl: data.coverUrl ?? null,
+            settings: (data as { settings?: UserSettings }).settings ?? {
+              dms: "everyone",
+              visibility: "public",
+              notifications: { likes: true, comments: true, follows: true }
+            }
           };
           await updateDoc(ref, { sessionVersion: sv });
           setUserProfile(prof);
@@ -529,7 +591,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           followers: 0,
           following: 0,
           avatarUrl: null,
-          coverUrl: null
+          coverUrl: null,
+          settings: {
+            dms: "everyone",
+            visibility: "public",
+            notifications: { likes: true, comments: true, follows: true }
+          }
         };
         const merged = { ...baseProfile, ...(profile || {}) };
         const sv = Date.now();
@@ -557,7 +624,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           followers: 0,
           following: 0,
           avatarUrl: null,
-          coverUrl: null
+          coverUrl: null,
+          settings: {
+            dms: "everyone",
+            visibility: "public",
+            notifications: { likes: true, comments: true, follows: true }
+          }
         };
         const merged = { ...baseProfile, ...(profile || {}) };
         setUserProfile(merged);

@@ -36,7 +36,12 @@ export default function ProfilePage() {
     website: ""
   });
   const [settingsForm, setSettingsForm] = useState({
-    campus: ""
+    campus: "",
+    dms: "everyone" as "everyone" | "followers" | "none",
+    visibility: "public" as "public" | "msu" | "private",
+    notifLikes: true,
+    notifComments: true,
+    notifFollows: true
   });
   const onFileToDataUrl = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -327,7 +332,15 @@ export default function ProfilePage() {
                     <motion.button 
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
-                        setSettingsForm({ campus: displayProfile?.campus ?? "" });
+                        const s = displayProfile?.settings || { dms: "everyone", visibility: "public", notifications: { likes: true, comments: true, follows: true } };
+                        setSettingsForm({
+                          campus: displayProfile?.campus ?? "",
+                          dms: s.dms,
+                          visibility: s.visibility,
+                          notifLikes: s.notifications.likes,
+                          notifComments: s.notifications.comments,
+                          notifFollows: s.notifications.follows
+                        });
                         setIsSettingsOpen(true);
                       }}
                       className="bg-zinc-800 text-gray-100 p-2 rounded-lg hover:bg-zinc-700 transition"
@@ -569,7 +582,7 @@ export default function ProfilePage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Campus</label>
                   <select
                     value={settingsForm.campus}
-                    onChange={(e) => setSettingsForm({ campus: e.target.value })}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, campus: e.target.value })}
                     className="w-full px-4 py-2 input-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     <option value="">Select campus</option>
@@ -587,6 +600,59 @@ export default function ProfilePage() {
                     <option value="Other">Other</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Direct messages</label>
+                  <select
+                    value={settingsForm.dms}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, dms: e.target.value as "everyone" | "followers" | "none" })}
+                    className="w-full px-4 py-2 input-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  >
+                    <option value="everyone">Everyone</option>
+                    <option value="followers">Followers only</option>
+                    <option value="none">No one</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Profile visibility</label>
+                  <select
+                    value={settingsForm.visibility}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, visibility: e.target.value as "public" | "msu" | "private" })}
+                    className="w-full px-4 py-2 input-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  >
+                    <option value="public">Public</option>
+                    <option value="msu">MSU users</option>
+                    <option value="private">Private</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={settingsForm.notifLikes}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, notifLikes: e.target.checked })}
+                      className="rounded"
+                    />
+                    Likes
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={settingsForm.notifComments}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, notifComments: e.target.checked })}
+                      className="rounded"
+                    />
+                    Comments
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={settingsForm.notifFollows}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, notifFollows: e.target.checked })}
+                      className="rounded"
+                    />
+                    Follows
+                  </label>
+                </div>
                 <div className="flex justify-end pt-2">
                   <button
                     onClick={() => setIsSettingsOpen(false)}
@@ -597,7 +663,16 @@ export default function ProfilePage() {
                   <button
                     onClick={() => {
                       if (!userProfile) return;
-                      updateUserProfile({ ...userProfile, campus: settingsForm.campus });
+                      const nextSettings = {
+                        dms: settingsForm.dms,
+                        visibility: settingsForm.visibility,
+                        notifications: {
+                          likes: settingsForm.notifLikes,
+                          comments: settingsForm.notifComments,
+                          follows: settingsForm.notifFollows
+                        }
+                      };
+                      updateUserProfile({ ...userProfile, campus: settingsForm.campus, settings: nextSettings });
                       setIsSettingsOpen(false);
                       showToast("Settings saved", "success");
                     }}
