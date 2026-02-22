@@ -17,7 +17,7 @@ import type { FirebaseOptions } from "firebase/app";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc, getDocs, query, where, arrayUnion, arrayRemove, addDoc, collection, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { isSupabaseConfigured as SUPABASE_CONFIGURED } from "@/lib/supabase";
+import { isSupabaseConfigured as SUPABASE_CONFIGURED, supabase } from "@/lib/supabase";
 import { upsertUserProfileSupabase } from "@/lib/supabaseHelpers";
 
 export interface UserSettings {
@@ -61,6 +61,8 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, pass: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithSupabaseGoogle: () => Promise<void>;
+  completeSupabaseOAuth: () => Promise<void>;
   signUp: (email: string, pass: string, profile?: Partial<UserProfile>) => Promise<void>;
   signOut: () => Promise<void>;
   updateUserProfile: (profile: UserProfile) => void;
@@ -558,6 +560,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem(`sessionVersion:${email}`, String(sv)); } catch {}
   };
 
+  const signInWithSupabaseGoogle = async () => {
+    if (!SUPABASE_CONFIGURED || !supabase) throw new Error("unavailable");
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: origin ? `${origin}/auth/supabase-callback` : undefined,
+        queryParams: { prompt: "select_account" },
+      },
+    });
+  };
+
+  const completeSupabaseOAuth = async () => {
+    if (!SUPABASE_CONFIGURED || !supabase) throw new Error("unavailable");
+    try {
+      if (typeof window !== "undefined") {
+        await supabase.auth.exchangeCodeForSession(window.location.href);
+      }
+    } catch {}
+    const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+    const su = data?.user;
+    if (!su || !su.email) throw new Error("no_user");
+    const email = su.email;
+    const baseProfile: UserProfile = {
+      displayName: su.user_metadata?.full_name || email.split("@")[0],
+      username: (su.user_metadata?.full_name || email.split("@")[0]).replace(/\s+/g, "").toLowerCase(),
+      bio: "Welcome to my profile!",
+      location: "Unknown",
+      website: "",
+      campus: null,
+      createdAt: Date.now(),
+      followers: 0,
+      following: 0,
+      avatarUrl: null,
+      coverUrl: null,
+      settings: { dms: "everyone", visibility: "public", notifications: { likes: true, comments: true, follows: true } },
+    };
+    const mu = { uid: `supabase-${su.id}`, email } as User;
+    setUser(mu);
+    setUserProfile(baseProfile);
+    localStorage.setItem("mock_user", JSON.stringify(mu));
+    localStorage.setItem("user_profile", JSON.stringify(baseProfile));
+    localStorage.setItem(`user_profile:${email}`, JSON.stringify(baseProfile));
+    upsertUserIndex(baseProfile.displayName, baseProfile);
+    try { await upsertUserProfileSupabase(email, baseProfile as unknown as Record<string, unknown>); } catch {}
+  };
+
   useEffect(() => {
     const isFirebaseConfigured =
       Boolean(auth && auth.app && auth.app.options) &&
@@ -916,7 +965,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [FIREBASE_CONFIGURED, user?.email]);
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, signIn, signInWithGoogle, signUp, signOut, updateUserProfile, isFollowing, toggleFollow, isBlocked, toggleBlock, listFollowing, listFollowers, removeFollower, listNotifications, markAllNotificationsRead, notify }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, signIn, signInWithGoogle, signInWithSupabaseGoogle, completeSupabaseOAuth, signUp, signOut, updateUserProfile, isFollowing, toggleFollow, isBlocked, toggleBlock, listFollowing, listFollowers, removeFollower, listNotifications, markAllNotificationsRead, notify }}>
       {children}
     </AuthContext.Provider>
   );

@@ -8,9 +8,8 @@ export const isSupabaseConfigured = Boolean(url && anon);
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(url, anon, {
       auth: {
-        persistSession: false,
-        detectSessionInUrl: false,
+        persistSession: true,
+        detectSessionInUrl: true,
       },
     })
   : null;
-

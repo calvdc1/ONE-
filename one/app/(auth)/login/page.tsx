@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showAnim, setShowAnim] = useState(false);
-  const { signIn, signInWithGoogle, user } = useAuth();
+  const { signIn, signInWithGoogle, signInWithSupabaseGoogle, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -118,7 +118,13 @@ export default function LoginPage() {
             onClick={async () => {
               try {
                 setLoading(true);
-                await signInWithGoogle();
+                // Prefer Supabase Google sign-in when configured; fall back to Firebase
+                try {
+                  await signInWithSupabaseGoogle();
+                  return; // will redirect to callback
+                } catch {
+                  await signInWithGoogle();
+                }
                 setShowAnim(true);
                 setTimeout(() => { router.push("/feed"); }, 300);
               } catch (e: unknown) {
