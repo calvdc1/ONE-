@@ -16,12 +16,21 @@ export default function SignupPage() {
   const [campus, setCampus] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const { signUp } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const { signUp, signInWithGoogle } = useAuth();
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
+    // Quick client-side validation
+    const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+    if (!firstName || !lastName || !campus || !emailOk || password.length < 6) {
+      setError(!emailOk ? "Enter a valid email address." : password.length < 6 ? "Password must be at least 6 characters." : "Please complete all required fields.");
+      setLoading(false);
+      return;
+    }
     try {
       const fullName = `${firstName} ${middleName} ${lastName}`.trim();
       const usernameSeed = `${firstName}${lastName}` || email.split("@")[0];
@@ -31,8 +40,20 @@ export default function SignupPage() {
       setTimeout(() => {
         router.push("/feed");
       }, 400);
-    } catch {
-      alert("Failed to create account. Please try again.");
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      const c = (err?.code || err?.message || "").toString();
+      let msg = "Failed to create account. Please try again.";
+      if (c.includes("auth/email-already-in-use")) {
+        msg = "Email already in use. Try logging in or use 'Continue with Google' if you registered with Google.";
+      } else if (c.includes("auth/invalid-email")) {
+        msg = "Invalid email address.";
+      } else if (c.includes("auth/weak-password")) {
+        msg = "Password is too weak. Use at least 6 characters.";
+      } else if (c.includes("network")) {
+        msg = "Network error. Check your connection and try again.";
+      }
+      setError(msg);
       setLoading(false);
     }
   };
@@ -89,7 +110,6 @@ export default function SignupPage() {
               onChange={(e) => setMiddleName(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 bg-white"
               placeholder="S."
-              required
             />
           </motion.div>
 
@@ -168,6 +188,9 @@ export default function SignupPage() {
               required
             />
           </motion.div>
+          {error && (
+            <div className="text-sm text-red-600">{error}</div>
+          )}
           
           <motion.button 
             whileHover={{ scale: 1.02 }}
@@ -177,6 +200,32 @@ export default function SignupPage() {
           >
             {loading ? "Creating Account..." : "Start"}
           </motion.button>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  setLoading(true);
+                  setError(null);
+                  await signInWithGoogle();
+                  setShowSuccess(true);
+                  setTimeout(() => { router.push("/feed"); }, 300);
+                } catch (e: unknown) {
+                  const er = e as { code?: string; message?: string };
+                  const cc = (er?.code || er?.message || "").toString();
+                  let msg = "Google sign-in failed. Try again.";
+                  if (cc.includes("unavailable")) msg = "Google sign-in unavailable without Firebase configuration.";
+                  setError(msg);
+                  setLoading(false);
+                }
+              }}
+              className="w-full border border-gray-300 text-gray-800 bg-white py-2 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-50"
+              disabled={loading}
+            >
+              Continue with Google
+            </button>
+          </div>
         </form>
         
         <motion.div 
