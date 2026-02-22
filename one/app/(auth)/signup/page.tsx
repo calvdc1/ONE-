@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
  
 
 export default function SignupPage() {
@@ -14,17 +15,12 @@ export default function SignupPage() {
   const [lastName, setLastName] = useState("");
   const [campus, setCampus] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [codeSent, setCodeSent] = useState(false);
-  const [codeInput, setCodeInput] = useState("");
-  const [generatedCode, setGeneratedCode] = useState("");
-  const [verified, setVerified] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const { signUp, signOut } = useAuth();
+  const { signUp } = useAuth();
+  const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!verified) return;
     setLoading(true);
     try {
       const fullName = `${firstName} ${middleName} ${lastName}`.trim();
@@ -33,28 +29,11 @@ export default function SignupPage() {
       await signUp(email, password, { displayName: fullName, username, campus });
       setShowSuccess(true);
       setTimeout(() => {
-        signOut();
-      }, 300);
+        router.push("/feed");
+      }, 400);
     } catch {
       alert("Failed to create account. Please try again.");
       setLoading(false);
-    }
-  };
-
-  const sendCode = () => {
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
-    setSending(true);
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedCode(code);
-    setTimeout(() => {
-      setSending(false);
-      setCodeSent(true);
-    }, 600);
-  };
-
-  const verifyCode = () => {
-    if (codeInput.trim() === generatedCode && codeInput.trim() !== "") {
-      setVerified(true);
     }
   };
 
@@ -164,52 +143,14 @@ export default function SignupPage() {
             transition={{ delay: 0.5 }}
           >
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <div className="flex gap-2">
-              <input 
-                type="email" 
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setVerified(false); setCodeSent(false); setCodeInput(""); }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 bg-white"
-                placeholder="you@example.com"
-                required
-              />
-              <button
-                type="button"
-                onClick={sendCode}
-                disabled={sending || !email}
-                className="px-3 py-2 rounded-lg bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 disabled:opacity-50"
-              >
-                {sending ? "Sending..." : codeSent ? "Resend" : "Send Code"}
-              </button>
-            </div>
-            {codeSent && !verified && (
-              <div className="mt-3">
-                <div className="text-xs text-gray-600 mb-1">Enter the 6-digit code</div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={6}
-                    value={codeInput}
-                    onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, ""))}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 bg-white tracking-widest"
-                    placeholder="••••••"
-                  />
-                  <button
-                    type="button"
-                    onClick={verifyCode}
-                    className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
-                  >
-                    Verify
-                  </button>
-                </div>
-                <div className="mt-1 text-xs text-gray-500">Dev preview code: <span className="font-mono">{generatedCode}</span></div>
-              </div>
-            )}
-            {verified && (
-              <div className="mt-2 text-sm text-green-600 font-semibold">Email verified</div>
-            )}
+            <input 
+              type="email" 
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 bg-white"
+              placeholder="you@example.com"
+              required
+            />
           </motion.div>
           
           <motion.div
@@ -231,10 +172,10 @@ export default function SignupPage() {
           <motion.button 
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            disabled={loading || !verified}
+            disabled={loading}
             className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
           >
-            {loading ? "Creating Account..." : verified ? "Sign Up" : "Verify Email First"}
+            {loading ? "Creating Account..." : "Start"}
           </motion.button>
         </form>
         

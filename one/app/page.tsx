@@ -210,35 +210,20 @@ export default function Home() {
         Connect with your MSU community.
       </motion.p>
       
-      <div className="relative z-10 flex flex-col gap-4 w-full max-w-xs">
+      <div className="relative z-10 w-full max-w-xs">
         <motion.div
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          initial={{ y: 14, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.45 }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
         >
-            <Link 
-            href="/login" 
-            className="block w-full bg-gradient-to-r from-amber-400 via-red-600 to-rose-500 text-white py-3 rounded-lg font-semibold transition hover:from-amber-500 hover:via-red-700 hover:to-rose-600"
-            >
-            Log In
-            </Link>
-        </motion.div>
-        
-        <motion.div
-            initial={{ x: 20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-        >
-            <Link 
-            href="/signup" 
-            className="block w-full bg-gradient-to-r from-amber-400 to-red-600 text-white py-3 rounded-lg font-semibold transition hover:from-amber-500 hover:to-rose-700"
-            >
-            Sign Up
-            </Link>
+          <Link
+            href="/signup"
+            className="block w-full bg-gradient-to-r from-amber-400 via-red-600 to-rose-500 text-white py-3 rounded-lg font-semibold transition hover:from-amber-500 hover:via-red-700 hover:to-rose-600 text-center"
+          >
+            Start
+          </Link>
         </motion.div>
       </div>
     </div>
