@@ -17,6 +17,8 @@ import type { FirebaseOptions } from "firebase/app";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc, getDocs, query, where, arrayUnion, arrayRemove, addDoc, collection, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
+import { isSupabaseConfigured as SUPABASE_CONFIGURED } from "@/lib/supabase";
+import { upsertUserProfileSupabase } from "@/lib/supabaseHelpers";
 
 export interface UserSettings {
   dms: "everyone" | "followers" | "none";
@@ -303,6 +305,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } catch {}
+        try {
+          const email = user?.email || (JSON.parse(localStorage.getItem("mock_user") || "{}") as { email?: string }).email;
+          if (SUPABASE_CONFIGURED && email) {
+            await upsertUserProfileSupabase(email, profile as unknown as Record<string, unknown>);
+          }
+        } catch {}
       })();
       try {
         const email = user?.email || (JSON.parse(localStorage.getItem("mock_user") || "{}") as { email?: string }).email;
@@ -420,6 +428,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             upsertUserIndex(prof.displayName, prof);
           }
         } catch {}
+        try {
+          if (SUPABASE_CONFIGURED) {
+            await upsertUserProfileSupabase(email, (userProfile || {}) as unknown as Record<string, unknown>);
+          }
+        } catch {}
       } else {
         await new Promise(resolve => setTimeout(resolve, 50)); // Fake delay
         const usersRaw = localStorage.getItem("registered_users");
@@ -501,6 +514,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserProfile(baseProfile);
         localStorage.setItem("user_profile", JSON.stringify(baseProfile));
         upsertUserIndex(baseProfile.displayName, baseProfile);
+        if (SUPABASE_CONFIGURED) {
+          try { await upsertUserProfileSupabase(email, baseProfile as unknown as Record<string, unknown>); } catch {}
+        }
       } else {
         const data = snap.data() as Partial<UserProfile> & { followersList?: string[]; followingList?: string[] };
         const prof: UserProfile = {
@@ -527,11 +543,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data.followersList) localStorage.setItem(`followers_of:${prof.displayName}`, JSON.stringify(data.followersList));
         if (data.followingList) localStorage.setItem(`following_of:${prof.displayName}`, JSON.stringify(data.followingList));
         upsertUserIndex(prof.displayName, prof);
+        if (SUPABASE_CONFIGURED) {
+          try { await upsertUserProfileSupabase(email, prof as unknown as Record<string, unknown>); } catch {}
+        }
       }
     } catch {
       setUserProfile(baseProfile);
       localStorage.setItem("user_profile", JSON.stringify(baseProfile));
       upsertUserIndex(baseProfile.displayName, baseProfile);
+      if (SUPABASE_CONFIGURED) {
+        try { await upsertUserProfileSupabase(email, baseProfile as unknown as Record<string, unknown>); } catch {}
+      }
     }
     try { localStorage.setItem(`sessionVersion:${email}`, String(sv)); } catch {}
   };
@@ -573,6 +595,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserProfile(baseProfile);
           localStorage.setItem("user_profile", JSON.stringify(baseProfile));
           upsertUserIndex(baseProfile.displayName, baseProfile);
+          if (SUPABASE_CONFIGURED) {
+            try { await upsertUserProfileSupabase(email, baseProfile as unknown as Record<string, unknown>); } catch {}
+          }
         } else {
           const data = snap.data() as Partial<UserProfile> & { followersList?: string[]; followingList?: string[] };
           const prof: UserProfile = {
@@ -599,11 +624,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (data.followersList) localStorage.setItem(`followers_of:${prof.displayName}`, JSON.stringify(data.followersList));
           if (data.followingList) localStorage.setItem(`following_of:${prof.displayName}`, JSON.stringify(data.followingList));
           upsertUserIndex(prof.displayName, prof);
+          if (SUPABASE_CONFIGURED) {
+            try { await upsertUserProfileSupabase(email, prof as unknown as Record<string, unknown>); } catch {}
+          }
         }
       } catch {
         setUserProfile(baseProfile);
         localStorage.setItem("user_profile", JSON.stringify(baseProfile));
         upsertUserIndex(baseProfile.displayName, baseProfile);
+        if (SUPABASE_CONFIGURED) {
+          try { await upsertUserProfileSupabase(email, baseProfile as unknown as Record<string, unknown>); } catch {}
+        }
       }
       try { localStorage.setItem(`sessionVersion:${email}`, String(sv)); } catch {}
     });
@@ -644,6 +675,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem("user_profile", JSON.stringify(merged));
         localStorage.setItem(`user_profile:${email}`, JSON.stringify(merged));
         upsertUserIndex(merged.displayName, merged);
+        if (SUPABASE_CONFIGURED) {
+          try { await upsertUserProfileSupabase(email, merged as unknown as Record<string, unknown>); } catch {}
+        }
       } else {
         await new Promise(resolve => setTimeout(resolve, 50));
         const mockUser = { uid: "mock-123", email } as User;
@@ -673,6 +707,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem("user_profile", JSON.stringify(merged));
         localStorage.setItem(`user_profile:${email}`, JSON.stringify(merged));
         upsertUserIndex(merged.displayName, merged);
+        if (SUPABASE_CONFIGURED) {
+          try { await upsertUserProfileSupabase(email, merged as unknown as Record<string, unknown>); } catch {}
+        }
         // Register credentials locally
         const usersRaw = localStorage.getItem("registered_users");
         const users: Record<string, { password: string }> = usersRaw ? JSON.parse(usersRaw) : {};
